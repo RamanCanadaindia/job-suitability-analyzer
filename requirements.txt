@@ -1,0 +1,5 @@
+# Job Suitability Analyzer dependencies
+streamlit
+pandas
+openpyxl
+google-generativeai
