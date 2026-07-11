@@ -79,6 +79,24 @@ def save_profile(data):
     except Exception as e:
         st.error(f"Failed to save profile: {e}")
 
+# Gmail Credentials Persistence
+gmail_config_path = "gmail_config.json"
+def load_gmail_config():
+    if os.path.exists(gmail_config_path):
+        try:
+            with open(gmail_config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"gmail_user": "", "gmail_password": "", "sheet_url": ""}
+
+def save_gmail_config(data):
+    try:
+        with open(gmail_config_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        st.error(f"Failed to save Gmail credentials: {e}")
+
 # Sidebar Configuration
 st.sidebar.header("⚙️ API Configurations")
 
@@ -361,12 +379,14 @@ with tab_gmail:
     from email.header import decode_header
     import sheets_helper
 
+    gmail_saved = load_gmail_config()
+
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", ""), placeholder="yourname@gmail.com")
-        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", ""), help="Create an App Password in your Google Account Security settings.")
+        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="yourname@gmail.com")
+        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account Security settings.")
     with col_g2:
-        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", st.secrets.get("google_spreadsheet_id", "")), placeholder="Paste sheet link here")
+        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
         scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
 
     if gmail_user:
@@ -376,7 +396,20 @@ with tab_gmail:
     if sheet_url:
         st.session_state["google_spreadsheet_id"] = sheet_url
 
-    gmail_btn = st.button("🚀 Scan Gmail & Post to Sheets", type="primary", use_container_width=True)
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        gmail_btn = st.button("🚀 Scan Gmail & Post to Sheets", type="primary", use_container_width=True)
+    with col_btn2:
+        save_gmail_btn = st.button("💾 Save Credentials locally", use_container_width=True)
+
+    if save_gmail_btn:
+        gmail_data = {
+            "gmail_user": gmail_user,
+            "gmail_password": gmail_password,
+            "sheet_url": sheet_url
+        }
+        save_gmail_config(gmail_data)
+        st.success("Credentials saved successfully!")
 
     if gmail_btn:
         if not gmail_user or not gmail_password:
