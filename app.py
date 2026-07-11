@@ -124,7 +124,7 @@ st.sidebar.info("""
 """)
 
 # Tabs
-tab_profile, tab_search = st.tabs(["👤 Candidate Profile", "🔍 Job Search & Ranking"])
+tab_profile, tab_search, tab_gmail = st.tabs(["👤 Candidate Profile", "🔍 Job Search & Ranking", "✉️ Gmail Alert Scanner"])
 
 with tab_profile:
     st.subheader("Define your Profile & Skills")
@@ -350,3 +350,269 @@ with tab_search:
                 st.write("")
                 st.link_button("🚀 Apply on Job Board", url=job["Apply Link"], use_container_width=True)
                 st.write("")
+
+
+with tab_gmail:
+    st.subheader("✉️ Scan Gmail for Indeed & LinkedIn Job Alerts")
+    st.markdown("This scanner logs into your Gmail, extracts jobs from recent Indeed/LinkedIn alert emails, ranks them using Gemini, and posts the results directly to Google Sheets!")
+
+    import imaplib
+    import email
+    from email.header import decode_header
+    import sheets_helper
+
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", ""), placeholder="yourname@gmail.com")
+        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", ""), help="Create an App Password in your Google Account Security settings.")
+    with col_g2:
+        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", st.secrets.get("google_spreadsheet_id", "")), placeholder="Paste sheet link here")
+        scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
+
+    if gmail_user:
+        st.session_state["GMAIL_USER"] = gmail_user
+    if gmail_password:
+        st.session_state["GMAIL_PASSWORD"] = gmail_password
+    if sheet_url:
+        st.session_state["google_spreadsheet_id"] = sheet_url
+
+    gmail_btn = st.button("🚀 Scan Gmail & Post to Sheets", type="primary", use_container_width=True)
+
+    if gmail_btn:
+        if not gmail_user or not gmail_password:
+            st.error("🔑 Please enter your Gmail Address and App Password!")
+        elif not sheet_url:
+            st.error("📊 Please specify your Google Sheet URL or ID!")
+        elif not gemini_key:
+            st.error("🔑 Please enter your Google AI Studio API Key in the sidebar first!")
+        else:
+            with st.spinner("📧 Connecting to Gmail IMAP server..."):
+                try:
+                    mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+                    mail.login(gmail_user, gmail_password)
+                    mail.select("inbox")
+                except Exception as e:
+                    st.error(f"❌ Failed to connect to Gmail: {e}. Check if IMAP is enabled and app password is correct.")
+                    mail = None
+
+            if mail:
+                alert_emails = []
+                with st.spinner("🔍 Searching for LinkedIn & Indeed job alert emails..."):
+                    # Search Indeed
+                    status_ind, data_ind = mail.search(None, 'FROM "indeed"')
+                    if status_ind == "OK" and data_ind[0]:
+                        alert_emails.extend([(msg_id, "Indeed") for msg_id in data_ind[0].split()])
+                    
+                    # Search LinkedIn
+                    status_li, data_li = mail.search(None, 'FROM "linkedin"')
+                    if status_li == "OK" and data_li[0]:
+                        alert_emails.extend([(msg_id, "LinkedIn") for msg_id in data_li[0].split()])
+
+                if not alert_emails:
+                    st.warning("No recent job alert emails found from Indeed or LinkedIn.")
+                    mail.logout()
+                else:
+                    # Sort by message ID descending (most recent first)
+                    alert_emails = sorted(alert_emails, key=lambda x: int(x[0]), reverse=True)[:scan_limit]
+                    st.info(f"Found {len(alert_emails)} recent job alert emails to process!")
+                    
+                    progress_gmail = st.progress(0)
+                    all_jobs_scraped = []
+                    
+                    for idx, (msg_id, source) in enumerate(alert_emails):
+                        # Fetch email
+                        res, msg_data = mail.fetch(msg_id, "(RFC822)")
+                        if res != "OK":
+                            continue
+                        
+                        raw_email = msg_data[0][1]
+                        msg = email.message_from_bytes(raw_email)
+                        
+                        # Extract subject
+                        subject, encoding = decode_header(msg["Subject"])[0]
+                        if isinstance(subject, bytes):
+                            subject = subject.decode(encoding or "utf-8", errors="ignore")
+                            
+                        # Extract body
+                        body = ""
+                        if msg.is_multipart():
+                            for part in msg.walk():
+                                content_type = part.get_content_type()
+                                content_disposition = str(part.get("Content-Disposition"))
+                                if content_type == "text/plain" and "attachment" not in content_disposition:
+                                    try:
+                                        body += part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                    except:
+                                        pass
+                                elif content_type == "text/html" and "attachment" not in content_disposition:
+                                    try:
+                                        html_content = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                        clean_text = re.sub("<[^<]+?>", "", html_content)
+                                        body += clean_text
+                                    except:
+                                        pass
+                        else:
+                            try:
+                                body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+                            except:
+                                pass
+                                
+                        # Token cleanup
+                        body_cleaned = " ".join(body.split())[:12000] # Cap size for Gemini context
+                        
+                        # Use Gemini to extract jobs from the alert body
+                        extract_prompt = f"""
+                        Extract all job listings from the following email content.
+                        Email Source: {source}
+                        Email Subject: {subject}
+                        
+                        Content:
+                        {body_cleaned}
+                        
+                        Output the list strictly in JSON format (list of objects):
+                        [
+                          {{
+                            "title": "Job Title",
+                            "company": "Company Name",
+                            "location": "Location",
+                            "description": "Short summary or requirements excerpt",
+                            "apply_link": "Application link or view button URL"
+                          }}
+                        ]
+                        Only return a valid JSON array.
+                        """
+                        try:
+                            gemini_extracted = query_gemini(extract_prompt, response_json=True)
+                            parsed_jobs = json.loads(gemini_extracted.strip())
+                            if isinstance(parsed_jobs, list):
+                                for pj in parsed_jobs:
+                                    pj["source"] = source
+                                    all_jobs_scraped.append(pj)
+                        except Exception as parse_e:
+                            pass
+                            
+                        progress_gmail.progress(int((idx + 1) / len(alert_emails) * 100))
+                    
+                    mail.logout()
+                    
+                    if not all_jobs_scraped:
+                        st.warning("No structured jobs could be extracted from the emails.")
+                    else:
+                        st.success(f"Parsed {len(all_jobs_scraped)} total jobs from your alerts! Scoring suitability...")
+                        
+                        progress_grade = st.progress(0)
+                        evaluated_rows = []
+                        cand_profile = load_profile()
+                        
+                        for idx, job in enumerate(all_jobs_scraped):
+                            job_title = job.get("title", "Unknown Title")
+                            company = job.get("company", "Unknown Company")
+                            job_loc = job.get("location", "Unknown Location")
+                            job_desc = job.get("description", "")
+                            apply_link = job.get("apply_link", "https://www.google.com")
+                            source_board = job.get("source", "Alert")
+                            
+                            prompt = f"""
+                            Compare this job listing against the candidate's profile:
+                            Candidate Profile:
+                            - Target Titles: {cand_profile.get('target_titles')}
+                            - Experience: {cand_profile.get('experience')}
+                            - Core Skills: {cand_profile.get('skills')}
+                            - Salary Target: {cand_profile.get('salary')}
+                            - Resume details: {cand_profile.get('resume')}
+
+                            Job Listing:
+                            - Title: {job_title}
+                            - Company: {company}
+                            - Location: {job_loc}
+                            - Source: {source_board}
+                            - Description: {job_desc}
+
+                            Analyze suitability. Output STRICTLY in JSON format:
+                            {{
+                              "suitability_score": 85,
+                              "recommendation": "Strong Match",
+                              "key_matches": ["matching skill 1", "2"],
+                              "gaps": ["missing skill 1", "2"],
+                              "pros": ["pro 1", "2"],
+                              "cons": ["con 1", "2"]
+                            }}
+                            Only return valid JSON.
+                            """
+                            try:
+                                gemini_res = query_gemini(prompt, response_json=True)
+                                eval_data = json.loads(gemini_res.strip())
+                            except Exception:
+                                eval_data = {
+                                    "suitability_score": 50,
+                                    "recommendation": "N/A",
+                                    "key_matches": [],
+                                    "gaps": [],
+                                    "pros": [],
+                                    "cons": []
+                                }
+                                
+                            evaluated_rows.append({
+                                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "Title": job_title,
+                                "Company": company,
+                                "Location": job_loc,
+                                "Source": source_board,
+                                "Score": eval_data.get("suitability_score", 50),
+                                "Recommendation": eval_data.get("recommendation", "N/A"),
+                                "Key Matches": ", ".join(eval_data.get("key_matches", [])),
+                                "Gaps": ", ".join(eval_data.get("gaps", [])),
+                                "Pros": ", ".join(eval_data.get("pros", [])),
+                                "Cons": ", ".join(eval_data.get("cons", [])),
+                                "Apply Link": apply_link
+                            })
+                            progress_grade.progress(int((idx + 1) / len(all_jobs_scraped) * 100))
+                            
+                        # Sort by Match Score Descending
+                        evaluated_rows = sorted(evaluated_rows, key=lambda x: x["Score"], reverse=True)
+                        
+                        # Post to Google Sheet
+                        with st.spinner("📊 Posting ranked listings to Google Sheets..."):
+                            client = sheets_helper.get_gspread_client()
+                            if client:
+                                spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                                if spreadsheet:
+                                    # Create/Get Ranked_Job_Alerts worksheet
+                                    sheet_name = "Ranked_Job_Alerts"
+                                    try:
+                                        wks = spreadsheet.worksheet(sheet_name)
+                                        existing_rows = wks.get_all_records()
+                                        # Deduplicate based on Title & Company combo
+                                        existing_keys = {f"{r.get('Title','')}|{r.get('Company','')}".strip().lower() for r in existing_rows}
+                                    except gspread.exceptions.WorksheetNotFound:
+                                        # headers
+                                        headers = ["Timestamp", "Title", "Company", "Location", "Source", "Score", "Recommendation", "Key Matches", "Gaps", "Pros", "Cons", "Apply Link"]
+                                        wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(headers)))
+                                        wks.append_row(headers)
+                                        existing_keys = set()
+                                        
+                                    rows_to_add = []
+                                    for r in evaluated_rows:
+                                        key = f"{r['Title']}|{r['Company']}".strip().lower()
+                                        if key in existing_keys:
+                                            continue
+                                        rows_to_add.append([
+                                            r["Timestamp"], r["Title"], r["Company"], r["Location"], r["Source"],
+                                            str(r["Score"]), r["Recommendation"], r["Key Matches"], r["Gaps"],
+                                            r["Pros"], r["Cons"], r["Apply Link"]
+                                        ])
+                                        
+                                    if rows_to_add:
+                                        wks.append_rows(rows_to_add, value_input_option="USER_ENTERED")
+                                        st.success(f"🎉 Successfully posted {len(rows_to_add)} new ranked listings to your Google Sheet '{sheet_name}'!")
+                                    else:
+                                        st.info("ℹ️ All alerts parsed are already synced to the Google Sheet.")
+                                        
+                        # Visual display
+                        st.subheader("📋 Parsed Alert Results")
+                        for idx, job in enumerate(evaluated_rows):
+                            st.write(f"**{idx+1}. {job['Title']}** at **{job['Company']}** ({job['Score']}% Match)")
+                            st.caption(f"📍 {job['Location']} | Source: {job['Source']}")
+                            st.write(f"*Recommendation:* {job['Recommendation']}")
+                            st.write(f"*Apply Link:* {job['Apply Link']}")
+                            st.write("---")
