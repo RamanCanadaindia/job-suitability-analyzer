@@ -79,6 +79,11 @@ def save_profile(data):
     try:
         with open(profile_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
+    except OSError as e:
+        if e.errno == 30:
+            st.info("ℹ️ Running online: profile is kept in memory for this session (files are read-only).")
+        else:
+            st.error(f"Failed to save profile: {e}")
     except Exception as e:
         st.error(f"Failed to save profile: {e}")
 
@@ -97,6 +102,11 @@ def save_gmail_config(data):
     try:
         with open(gmail_config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
+    except OSError as e:
+        if e.errno == 30:
+            pass # Silent skip, handled dynamically
+        else:
+            st.error(f"Failed to save Gmail credentials: {e}")
     except Exception as e:
         st.error(f"Failed to save Gmail credentials: {e}")
 
@@ -435,6 +445,9 @@ with tab_gmail:
     with col_btn2:
         save_gmail_btn = st.button("💾 Save Credentials locally", use_container_width=True)
 
+    # Track if we encounter a read-only filesystem error during save
+    st.session_state["read_only_fs"] = False
+
     def save_secret_key(key_name, value_str):
         try:
             secrets_dir = ".streamlit"
@@ -460,6 +473,11 @@ with tab_gmail:
                 
             with open(secrets_file, "w") as sf:
                 sf.writelines(new_lines)
+        except OSError as e:
+            if e.errno == 30:
+                st.session_state["read_only_fs"] = True
+            else:
+                st.error(f"Failed to save secret {key_name}: {e}")
         except Exception as e:
             st.error(f"Failed to save secret {key_name}: {e}")
 
@@ -487,7 +505,10 @@ with tab_gmail:
         if serp_val:
             save_secret_key("serpapi_key", serp_val)
             
-        st.success("💾 All credentials and API keys saved successfully!")
+        if st.session_state.get("read_only_fs", False):
+            st.warning("⚠️ Running online (read-only file system). Gmail settings are active in memory, but permanent API keys/GCP secrets must be configured in your **Streamlit Cloud Settings Dashboard (Secrets)** to persist!")
+        else:
+            st.success("💾 All credentials and API keys saved successfully!")
 
     if gmail_btn:
         if not gmail_user or not gmail_password:
