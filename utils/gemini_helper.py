@@ -1,40 +1,84 @@
 import os
 import json
-import google.generativeai as genai
-
-def get_gemini_client():
-    """
-    Checks if GEMINI_API_KEY is available in the environment and returns a model instance.
-    Returns None if not configured.
-    """
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return None
-    try:
-        genai.configure(api_key=api_key)
-        # Using gemini-1.5-flash as the default fast and capable model
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        return model
-    except Exception as e:
-        print(f"Error configuring Gemini API client: {e}")
-        return None
+import urllib.request
+import urllib.error
+import time
 
 def query_gemini(prompt, response_json=False):
     """
-    Queries Gemini with a prompt. Returns the text response.
-    If response_json is True, instructs the model to return JSON format.
+    Queries Gemini using standard REST API calls to avoid gRPC hanging bugs and library conflicts.
+    Handles rate-limits (429) automatically via backoff retries.
     """
-    model = get_gemini_client()
-    if not model:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("[Gemini REST] API key not configured in environment.")
         return None
+        
+    # Try models in order of preference
+    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     
-    try:
-        config = {}
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ]
+        }
+        
         if response_json:
-            config["response_mime_type"] = "application/json"
+            payload["generationConfig"] = {
+                "responseMimeType": "application/json"
+            }
             
-        response = model.generate_content(prompt, generation_config=config)
-        return response.text.strip()
-    except Exception as e:
-        print(f"Error querying Gemini API: {e}")
-        return None
+        req_data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=req_data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        
+        try:
+            # Set a strict 15-second timeout for the HTTP request
+            with urllib.request.urlopen(req, timeout=15) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                candidates = res_data.get("candidates", [])
+                if candidates:
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    if parts:
+                        return parts[0].get("text", "").strip()
+            return None
+        except urllib.error.HTTPError as he:
+            if he.code == 429:
+                print(f"[Gemini REST] Rate limited (429) on model {model_name}. Retrying in 11 seconds...")
+                time.sleep(11.0)
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        res_data = json.loads(response.read().decode("utf-8"))
+                        candidates = res_data.get("candidates", [])
+                        if candidates:
+                            content = candidates[0].get("content", {})
+                            parts = content.get("parts", [])
+                            if parts:
+                                return parts[0].get("text", "").strip()
+                except Exception as retry_err:
+                    print(f"[Gemini REST] Retry failed: {retry_err}")
+                return None
+            elif he.code in (404, 400):
+                print(f"[Gemini REST] Model {model_name} returned {he.code}, trying next...")
+                continue
+            else:
+                print(f"[Gemini REST] HTTP Error {he.code}: {he.read().decode('utf-8', errors='ignore')}")
+                return None
+        except Exception as e:
+            print(f"[Gemini REST] Error calling model {model_name}: {e}")
+            continue
+            
+    print("[Gemini REST] All models failed.")
+    return None

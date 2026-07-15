@@ -1,0 +1,6 @@
+.streamlit/
+gmail_config.json
+user_profile.json
+__pycache__/
+*.pyc
+.DS_Store

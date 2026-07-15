@@ -8,6 +8,9 @@ import urllib.parse
 from utils.gemini_helper import query_gemini
 from utils.excel_helper import save_to_excel
 import auth
+from datetime import datetime
+import gspread
+
 
 # Force Page Configurations
 st.set_page_config(
@@ -132,6 +135,22 @@ serp_key = st.sidebar.text_input(
 )
 if serp_key:
     st.session_state["SERPAPI_API_KEY"] = serp_key
+
+gcp_json_default = ""
+try:
+    if "gcp_service_account_json" in st.secrets:
+        gcp_json_default = st.secrets["gcp_service_account_json"]
+except:
+    pass
+
+gcp_json = st.sidebar.text_input(
+    "Google Sheets Service Account JSON",
+    type="password",
+    value=st.session_state.get("GCP_SERVICE_ACCOUNT_JSON", gcp_json_default),
+    help="Paste the content of your Google Cloud Service Account JSON file here."
+)
+if gcp_json:
+    st.session_state["GCP_SERVICE_ACCOUNT_JSON"] = gcp_json
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### How to use:")
@@ -396,20 +415,79 @@ with tab_gmail:
     if sheet_url:
         st.session_state["google_spreadsheet_id"] = sheet_url
 
+    # Read service account email to show to user
+    client_email = "Not configured"
+    try:
+        if "gcp_service_account_json" in st.secrets:
+            creds_dict = json.loads(st.secrets["gcp_service_account_json"])
+            client_email = creds_dict.get("client_email", "Not configured")
+        elif "gcp_service_account" in st.secrets:
+            client_email = st.secrets["gcp_service_account"].get("client_email", "Not configured")
+    except:
+        pass
+
+    if client_email != "Not configured":
+        st.info(f"📋 **Service Account Email to share your Google Sheet with:**\n`{client_email}`\n\n*(Make sure this email has **Editor** access to your spreadsheet!)*")
+
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         gmail_btn = st.button("🚀 Scan Gmail & Post to Sheets", type="primary", use_container_width=True)
     with col_btn2:
         save_gmail_btn = st.button("💾 Save Credentials locally", use_container_width=True)
 
+    def save_secret_key(key_name, value_str):
+        try:
+            secrets_dir = ".streamlit"
+            secrets_file = os.path.join(secrets_dir, "secrets.toml")
+            os.makedirs(secrets_dir, exist_ok=True)
+            
+            lines = []
+            if os.path.exists(secrets_file):
+                with open(secrets_file, "r") as sf:
+                    lines = sf.readlines()
+                    
+            found = False
+            new_lines = []
+            for line in lines:
+                if line.strip().startswith(f"{key_name} =") or line.strip().startswith(f"{key_name}="):
+                    new_lines.append(f'{key_name} = {json.dumps(value_str)}\n')
+                    found = True
+                else:
+                    new_lines.append(line)
+                    
+            if not found:
+                new_lines.append(f'{key_name} = {json.dumps(value_str)}\n')
+                
+            with open(secrets_file, "w") as sf:
+                sf.writelines(new_lines)
+        except Exception as e:
+            st.error(f"Failed to save secret {key_name}: {e}")
+
     if save_gmail_btn:
+        # Save Gmail Credentials
         gmail_data = {
             "gmail_user": gmail_user,
             "gmail_password": gmail_password,
             "sheet_url": sheet_url
         }
         save_gmail_config(gmail_data)
-        st.success("Credentials saved successfully!")
+        
+        # Save GCP JSON
+        gcp_val = st.session_state.get("GCP_SERVICE_ACCOUNT_JSON", "")
+        if gcp_val:
+            save_secret_key("gcp_service_account_json", gcp_val)
+            
+        # Save Gemini API Key
+        gemini_val = st.session_state.get("GEMINI_API_KEY", "")
+        if gemini_val:
+            save_secret_key("GEMINI_API_KEY", gemini_val)
+            
+        # Save SerpAPI Key
+        serp_val = st.session_state.get("SERPAPI_API_KEY", "")
+        if serp_val:
+            save_secret_key("serpapi_key", serp_val)
+            
+        st.success("💾 All credentials and API keys saved successfully!")
 
     if gmail_btn:
         if not gmail_user or not gmail_password:
@@ -431,15 +509,36 @@ with tab_gmail:
             if mail:
                 alert_emails = []
                 with st.spinner("🔍 Searching for LinkedIn & Indeed job alert emails..."):
-                    # Search Indeed
+                    # Search Indeed with subject fallback
+                    seen_ids = set()
                     status_ind, data_ind = mail.search(None, 'FROM "indeed"')
                     if status_ind == "OK" and data_ind[0]:
-                        alert_emails.extend([(msg_id, "Indeed") for msg_id in data_ind[0].split()])
+                        for msg_id in data_ind[0].split():
+                            if msg_id not in seen_ids:
+                                seen_ids.add(msg_id)
+                                alert_emails.append((msg_id, "Indeed"))
                     
-                    # Search LinkedIn
+                    status_ind_fb, data_ind_fb = mail.search(None, 'SUBJECT "Indeed"')
+                    if status_ind_fb == "OK" and data_ind_fb[0]:
+                        for msg_id in data_ind_fb[0].split():
+                            if msg_id not in seen_ids:
+                                seen_ids.add(msg_id)
+                                alert_emails.append((msg_id, "Indeed"))
+                    
+                    # Search LinkedIn with subject fallback
                     status_li, data_li = mail.search(None, 'FROM "linkedin"')
                     if status_li == "OK" and data_li[0]:
-                        alert_emails.extend([(msg_id, "LinkedIn") for msg_id in data_li[0].split()])
+                        for msg_id in data_li[0].split():
+                            if msg_id not in seen_ids:
+                                seen_ids.add(msg_id)
+                                alert_emails.append((msg_id, "LinkedIn"))
+                                
+                    status_li_fb, data_li_fb = mail.search(None, 'SUBJECT "LinkedIn"')
+                    if status_li_fb == "OK" and data_li_fb[0]:
+                        for msg_id in data_li_fb[0].split():
+                            if msg_id not in seen_ids:
+                                seen_ids.add(msg_id)
+                                alert_emails.append((msg_id, "LinkedIn"))
 
                 if not alert_emails:
                     st.warning("No recent job alert emails found from Indeed or LinkedIn.")
@@ -466,30 +565,51 @@ with tab_gmail:
                         if isinstance(subject, bytes):
                             subject = subject.decode(encoding or "utf-8", errors="ignore")
                             
-                        # Extract body
+                        # Extract body (prefer HTML to capture links, preserve anchors)
                         body = ""
+                        html_content = ""
+                        plain_content = ""
+                        
                         if msg.is_multipart():
                             for part in msg.walk():
                                 content_type = part.get_content_type()
                                 content_disposition = str(part.get("Content-Disposition"))
-                                if content_type == "text/plain" and "attachment" not in content_disposition:
+                                if "attachment" in content_disposition:
+                                    continue
+                                if content_type == "text/plain":
                                     try:
-                                        body += part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                        plain_content += part.get_payload(decode=True).decode("utf-8", errors="ignore")
                                     except:
                                         pass
-                                elif content_type == "text/html" and "attachment" not in content_disposition:
+                                elif content_type == "text/html":
                                     try:
-                                        html_content = part.get_payload(decode=True).decode("utf-8", errors="ignore")
-                                        clean_text = re.sub("<[^<]+?>", "", html_content)
-                                        body += clean_text
+                                        html_content += part.get_payload(decode=True).decode("utf-8", errors="ignore")
                                     except:
                                         pass
                         else:
                             try:
-                                body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                plain_content = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
                             except:
                                 pass
                                 
+                        if html_content:
+                            # Strip head, style, and script blocks (including their contents)
+                            clean_html = re.sub(r'<head\b[^>]*>([\s\S]*?)</head>', ' ', html_content, flags=re.IGNORECASE)
+                            clean_html = re.sub(r'<style\b[^>]*>([\s\S]*?)</style>', ' ', clean_html, flags=re.IGNORECASE)
+                            clean_html = re.sub(r'<script\b[^>]*>([\s\S]*?)</script>', ' ', clean_html, flags=re.IGNORECASE)
+                            
+                            # Transform <a href="url">text</a> into text (url)
+                            processed_html = re.sub(
+                                r'<a\s+[^>]*?href=["\']([^"\']*)["\'][^>]*>(.*?)</a>',
+                                r'\2 (\1)',
+                                clean_html,
+                                flags=re.IGNORECASE | re.DOTALL
+                            )
+                            # Strip all HTML tags
+                            body = re.sub(r'<[^<]+?>', ' ', processed_html)
+                        else:
+                            body = plain_content
+                            
                         # Token cleanup
                         body_cleaned = " ".join(body.split())[:12000] # Cap size for Gemini context
                         
