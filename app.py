@@ -11,6 +11,38 @@ import auth
 from datetime import datetime
 import gspread
 
+def scrape_linkedin_job(url):
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read().decode("utf-8", errors="ignore")
+            
+        import re
+        match = re.search(r'<div[^>]*class="[^"]*show-more-less-html__markup[^"]*"[^>]*>([\s\S]*?)</div>', html)
+        if match:
+            desc_html = match.group(1)
+            desc_text = re.sub(r'<[^>]+?>', ' ', desc_html)
+            return " ".join(desc_text.split())
+            
+        match_section = re.search(r'<section[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)</section>', html)
+        if match_section:
+            desc_html = match_section.group(1)
+            desc_text = re.sub(r'<[^>]+?>', ' ', desc_html)
+            return " ".join(desc_text.split())
+            
+        match_meta = re.search(r'<meta[^>]*name="description"[^>]*content="([^"]*)"', html)
+        if match_meta:
+            return match_meta.group(1)
+            
+        return None
+    except Exception as e:
+        print(f"Scrape LinkedIn failed: {e}")
+        return None
+
 
 # Force Page Configurations
 st.set_page_config(
@@ -171,7 +203,7 @@ st.sidebar.info("""
 """)
 
 # Tabs
-tab_profile, tab_search, tab_gmail = st.tabs(["👤 Candidate Profile", "🔍 Job Search & Ranking", "✉️ Gmail Alert Scanner"])
+tab_profile, tab_search, tab_gmail, tab_gap = st.tabs(["👤 Candidate Profile", "🔍 Job Search & Ranking", "✉️ Gmail Alert Scanner", "🎯 Skill Gap Analyzer"])
 
 with tab_profile:
     st.subheader("Define your Profile & Skills")
@@ -790,3 +822,98 @@ with tab_gmail:
                             st.write(f"*Recommendation:* {job['Recommendation']}")
                             st.write(f"*Apply Link:* {job['Apply Link']}")
                             st.write("---")
+
+with tab_gap:
+    st.subheader("🎯 Single Job Skill Gap Analyzer")
+    st.markdown("Paste a job URL (LinkedIn, Indeed, etc.) or paste the raw Job Description text to analyze matches and gaps against your candidate profile.")
+    
+    col_gap1, col_gap2 = st.columns(2)
+    with col_gap1:
+        job_url_input = st.text_input("Job URL (LinkedIn, Indeed, etc.)", placeholder="Paste job posting link here", key="gap_url")
+    with col_gap2:
+        job_title_input = st.text_input("Job Title / Company (Optional)", placeholder="e.g. Bookkeeper at Maple Services", key="gap_title")
+        
+    job_desc_input = st.text_area("Or, paste the Job Description text directly", height=200, placeholder="Paste job description details here...", key="gap_desc")
+    
+    analyze_gap_btn = st.button("🔍 Analyze Skill Gaps & Generate Roadmap", type="primary", use_container_width=True)
+    
+    if analyze_gap_btn:
+        job_desc = ""
+        
+        # 1. Try to fetch from URL if provided
+        if job_url_input:
+            with st.spinner("🌐 Attempting to fetch job details from URL..."):
+                fetched_desc = scrape_linkedin_job(job_url_input)
+                if fetched_desc:
+                    job_desc = fetched_desc
+                    st.success("🎉 Successfully fetched job description from URL!")
+                else:
+                    st.warning("⚠️ Could not scrape the URL automatically. Falling back to pasted description.")
+                    
+        # 2. Use pasted description if URL fetch failed or wasn't provided
+        if not job_desc:
+            job_desc = job_desc_input
+            
+        if not job_desc:
+            st.error("❗ Please paste a job URL or copy-paste the Job Description text!")
+        elif not gemini_key:
+            st.error("🔑 Please enter your Google AI Studio API Key in the sidebar first!")
+        else:
+            with st.spinner("🤖 Analyzing skills and generating learning roadmap..."):
+                prompt = f"""
+                Compare the candidate's profile against this job description and identify the exact skills required by the employer.
+                Highlight the matching skills, missing skills (gaps), and provide a study/development roadmap to acquire the missing skills.
+
+                Candidate Profile:
+                - Skills: {cand_profile.get('skills')}
+                - Target Titles: {cand_profile.get('target_titles')}
+                - Experience: {cand_profile.get('experience')}
+                - Resume: {cand_profile.get('resume')}
+
+                Job Description:
+                - Title/Company: {job_title_input}
+                - Content: {job_desc}
+
+                Output STRICTLY in JSON format:
+                {{
+                  "job_title": "extracted job title",
+                  "company": "extracted company",
+                  "skills_required": ["skill 1", "skill 2"],
+                  "matching_skills": ["skill A", "skill B"],
+                  "missing_skills": ["skill X", "skill Y"],
+                  "learning_roadmap": {{
+                    "skill X": "specific action item or resource to learn skill X",
+                    "skill Y": "specific action item or resource to learn skill Y"
+                  }},
+                  "suitability_score": 85
+                }}
+                Only return valid JSON. Do not include markdown code blocks or formatting.
+                """
+                try:
+                    res = query_gemini(prompt, response_json=True)
+                    gap_data = json.loads(res.strip())
+                    
+                    st.subheader(f"📊 Analysis: {gap_data.get('job_title', 'Job')} at {gap_data.get('company', 'Employer')}")
+                    st.metric("Suitability Score", f"{gap_data.get('suitability_score', 0)}%")
+                    
+                    col_m1, col_m2 = st.columns(2)
+                    with col_m1:
+                        st.success("✅ Matching Skills (You have these!)")
+                        for s in gap_data.get("matching_skills", []):
+                            st.write(f"- {s}")
+                            
+                    with col_m2:
+                        st.error("❌ Missing Skills / Gaps (Employer requires these!)")
+                        for s in gap_data.get("missing_skills", []):
+                            st.write(f"- {s}")
+                            
+                    st.subheader("📚 Recommended Learning Roadmap")
+                    roadmap = gap_data.get("learning_roadmap", {})
+                    if roadmap:
+                        for skill, path in roadmap.items():
+                            st.info(f"**How to learn {skill}:**\n{path}")
+                    else:
+                        st.success("🎉 You meet all skill requirements for this position!")
+                        
+                except Exception as e:
+                    st.error(f"❌ Failed to parse gap analysis: {e}")
