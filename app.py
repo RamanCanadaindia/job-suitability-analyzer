@@ -838,6 +838,7 @@ with tab_gap:
     analyze_gap_btn = st.button("🔍 Analyze Skill Gaps & Generate Roadmap", type="primary", use_container_width=True)
     
     if analyze_gap_btn:
+        cand_profile = load_profile()
         job_desc = ""
         
         # 1. Try to fetch from URL if provided
