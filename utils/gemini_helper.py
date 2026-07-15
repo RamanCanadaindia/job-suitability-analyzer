@@ -11,7 +11,15 @@ def query_gemini(prompt, response_json=False):
     """
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("[Gemini REST] API key not configured in environment.")
+        try:
+            import streamlit as st
+            if "GEMINI_API_KEY" in st.secrets:
+                api_key = st.secrets["GEMINI_API_KEY"]
+        except:
+            pass
+            
+    if not api_key:
+        print("[Gemini REST] API key not configured in environment or Streamlit secrets.")
         return None
         
     # Try models in order of preference
