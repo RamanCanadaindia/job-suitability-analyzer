@@ -323,6 +323,8 @@ with tab_search:
                     
                     try:
                         gemini_res = query_gemini(prompt, response_json=True)
+                        if not gemini_res:
+                            raise ValueError("API Key limit exceeded or request failed.")
                         eval_data = json.loads(gemini_res.strip())
                     except Exception as e:
                         eval_data = {
@@ -689,6 +691,8 @@ with tab_gmail:
                         """
                         try:
                             gemini_extracted = query_gemini(extract_prompt, response_json=True)
+                            if not gemini_extracted:
+                                raise ValueError("API Key limit exceeded or request failed.")
                             parsed_jobs = json.loads(gemini_extracted.strip())
                             if isinstance(parsed_jobs, list):
                                 for pj in parsed_jobs:
@@ -747,6 +751,8 @@ with tab_gmail:
                             """
                             try:
                                 gemini_res = query_gemini(prompt, response_json=True)
+                                if not gemini_res:
+                                    raise ValueError("API Key limit exceeded or request failed.")
                                 eval_data = json.loads(gemini_res.strip())
                             except Exception:
                                 eval_data = {
@@ -892,7 +898,10 @@ with tab_gap:
                 """
                 try:
                     res = query_gemini(prompt, response_json=True)
-                    gap_data = json.loads(res.strip())
+                    if not res:
+                        st.error("❌ Failed to analyze skill gaps: Google AI Studio API Key daily request limit exceeded. Please get a fresh API key from Google AI Studio and paste it in the sidebar.")
+                    else:
+                        gap_data = json.loads(res.strip())
                     
                     st.subheader(f"📊 Analysis: {gap_data.get('job_title', 'Job')} at {gap_data.get('company', 'Employer')}")
                     st.metric("Suitability Score", f"{gap_data.get('suitability_score', 0)}%")
