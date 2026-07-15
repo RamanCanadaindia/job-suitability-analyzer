@@ -64,10 +64,31 @@ def query_gemini(prompt, response_json=False):
             return None
         except urllib.error.HTTPError as he:
             if he.code == 429:
-                print(f"[Gemini REST] Rate limited (429) on model {model_name}. Retrying in 11 seconds...")
-                time.sleep(11.0)
+                retry_seconds = 35.0
                 try:
-                    with urllib.request.urlopen(req, timeout=15) as response:
+                    err_body = he.read().decode("utf-8", errors="ignore")
+                    err_json = json.loads(err_body)
+                    details = err_json.get("error", {}).get("details", [])
+                    for detail in details:
+                        if "retryDelay" in detail:
+                            delay_str = detail.get("retryDelay", "35s")
+                            retry_seconds = float(delay_str.replace("s", ""))
+                            break
+                except Exception as parse_err:
+                    print(f"[Gemini REST] Could not parse retry delay: {parse_err}")
+                
+                sleep_duration = retry_seconds + 2.0
+                print(f"[Gemini REST] Rate limited (429) on model {model_name}. Waiting {sleep_duration:.1f}s...")
+                time.sleep(sleep_duration)
+                
+                try:
+                    req_retry = urllib.request.Request(
+                        url,
+                        data=req_data,
+                        headers={"Content-Type": "application/json"},
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req_retry, timeout=15) as response:
                         res_data = json.loads(response.read().decode("utf-8"))
                         candidates = res_data.get("candidates", [])
                         if candidates:
