@@ -5,3 +5,5 @@ openpyxl
 google-generativeai
 gspread
 google-auth
+reportlab
+playwright

@@ -5,7 +5,8 @@ import re
 import os
 import urllib.request
 import urllib.parse
-from utils.gemini_helper import query_gemini
+from utils.gemini_helper import query_gemini, GeminiError
+from utils.pdf_helper import convert_markdown_to_pdf
 from utils.excel_helper import save_to_excel
 import auth
 from datetime import datetime
@@ -41,6 +42,81 @@ def scrape_linkedin_job(url):
         return None
     except Exception as e:
         print(f"Scrape LinkedIn failed: {e}")
+        return None
+        
+def scrape_job_url(url):
+    try:
+        from playwright.sync_api import sync_playwright
+        import time
+        
+        if "linkedin.com" in url:
+            desc = scrape_linkedin_job(url)
+            if desc:
+                return desc
+                
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            time.sleep(5)
+            
+            salary_text = ""
+            salary_selectors = [
+                "div[data-testid='jobsearch-JobDescriptionSection-section-pay']",
+                ".salary-snippet-container",
+                ".jobsearch-JobMetadataHeader-item",
+                "div.salary-snippet",
+                ".jobsearch-JobComponent"
+            ]
+            for ss in salary_selectors:
+                try:
+                    loc = page.locator(ss)
+                    if loc.count() > 0:
+                        t = loc.first.inner_text().strip()
+                        if t and any(char.isdigit() for char in t) and ("$" in t or "year" in t or "hour" in t or "Pay" in t or "Salary" in t):
+                            if "\n" in t:
+                                for line in t.split("\n"):
+                                    if "$" in line and any(char.isdigit() for char in line):
+                                        salary_text = f"Salary/Pay Info: {line}\n"
+                                        break
+                            else:
+                                salary_text = f"Salary/Pay Info: {t}\n"
+                            if salary_text:
+                                break
+                except:
+                    pass
+
+            selectors = [
+                "#jobDescriptionText",
+                ".jobsearch-JobComponent-description",
+                "div.jobsearch-jobDescriptionText",
+                ".description__text",
+                ".show-more-less-html__markup",
+                "#details-job-description"
+            ]
+            full_desc = ""
+            for s in selectors:
+                try:
+                    locator = page.locator(s)
+                    if locator.count() > 0:
+                        text = locator.first.inner_text()
+                        if text and len(text.strip()) > 100:
+                            full_desc = text.strip()
+                            break
+                except:
+                    pass
+                
+            if salary_text and full_desc and salary_text not in full_desc:
+                full_desc = salary_text + "\n" + full_desc
+                
+            browser.close()
+            return full_desc if len(full_desc.strip()) > 50 else None
+    except Exception as e:
+        print(f"Scrape Job URL failed: {e}")
         return None
 
 
@@ -105,7 +181,7 @@ def load_profile():
                 return json.load(f)
         except:
             pass
-    return {"target_titles": "", "skills": "", "experience": "", "salary": "", "resume": ""}
+    return {"candidate_name": "", "candidate_phone": "", "candidate_email": "", "candidate_linkedin": "", "target_titles": "", "skills": "", "experience": "", "salary": "", "resume": ""}
 
 def save_profile(data):
     try:
@@ -203,7 +279,7 @@ st.sidebar.info("""
 """)
 
 # Tabs
-tab_profile, tab_search, tab_gmail, tab_gap = st.tabs(["👤 Candidate Profile", "🔍 Job Search & Ranking", "✉️ Gmail Alert Scanner", "🎯 Skill Gap Analyzer"])
+tab_profile, tab_search, tab_gmail, tab_gap, tab_tailor = st.tabs(["👤 Candidate Profile", "🔍 Job Search & Ranking", "✉️ Gmail Alert Scanner", "🎯 Skill Gap Analyzer", "📄 ATS Resume Tailor"])
 
 with tab_profile:
     st.subheader("Define your Profile & Skills")
@@ -211,18 +287,32 @@ with tab_profile:
     
     saved_profile = load_profile()
     
+    st.markdown("#### 📞 Contact Information")
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        c_name = st.text_input("Full Name", value=saved_profile.get("candidate_name", ""), placeholder="e.g. Raman Deep Kumar")
+        c_phone = st.text_input("Phone Number", value=saved_profile.get("candidate_phone", ""), placeholder="e.g. 604-440-9885")
+    with col_c2:
+        c_email = st.text_input("Email Address", value=saved_profile.get("candidate_email", ""), placeholder="e.g. email@domain.com")
+        c_linkedin = st.text_input("LinkedIn Profile URL", value=saved_profile.get("candidate_linkedin", ""), placeholder="e.g. https://www.linkedin.com/in/username")
+        
+    st.markdown("#### 🎯 Target Role & Skills")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        titles = st.text_input("Target Job Titles (comma separated)", value=saved_profile.get("target_titles", ""), placeholder="e.g., Python Developer, Data Analyst")
-        experience = st.text_input("Years of Experience", value=saved_profile.get("experience", ""), placeholder="e.g., 3 years")
+        titles = st.text_input("Target Job Titles (comma separated)", value=saved_profile.get("target_titles", ""), placeholder="e.g., Accountant, Bookkeeper")
+        experience = st.text_input("Years of Experience", value=saved_profile.get("experience", ""), placeholder="e.g., 5 years")
     with col_t2:
-        skills = st.text_input("Core Technical/Soft Skills (comma separated)", value=saved_profile.get("skills", ""), placeholder="e.g., Python, SQL, REST APIs, Git")
-        salary = st.text_input("Target Salary (optional)", value=saved_profile.get("salary", ""), placeholder="e.g., $90,000 CAD")
+        skills = st.text_input("Core Technical/Soft Skills (comma separated)", value=saved_profile.get("skills", ""), placeholder="e.g., T1/T2 Tax, QuickBooks, CaseWare")
+        salary = st.text_input("Target Salary (optional)", value=saved_profile.get("salary", ""), placeholder="e.g., $65,000 CAD")
         
     resume = st.text_area("Paste Resume Text / Qualifications summary", value=saved_profile.get("resume", ""), height=250, placeholder="Paste your full resume text here...")
     
     if st.button("💾 Save Profile locally"):
         profile_data = {
+            "candidate_name": c_name,
+            "candidate_phone": c_phone,
+            "candidate_email": c_email,
+            "candidate_linkedin": c_linkedin,
             "target_titles": titles,
             "skills": skills,
             "experience": experience,
@@ -450,7 +540,7 @@ with tab_gmail:
         gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account Security settings.")
     with col_g2:
         sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
-        scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
+        scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=5)
 
     if gmail_user:
         st.session_state["GMAIL_USER"] = gmail_user
@@ -484,29 +574,20 @@ with tab_gmail:
 
     def save_secret_key(key_name, value_str):
         try:
+            import toml
             secrets_dir = ".streamlit"
             secrets_file = os.path.join(secrets_dir, "secrets.toml")
             os.makedirs(secrets_dir, exist_ok=True)
             
-            lines = []
+            data = {}
             if os.path.exists(secrets_file):
-                with open(secrets_file, "r") as sf:
-                    lines = sf.readlines()
-                    
-            found = False
-            new_lines = []
-            for line in lines:
-                if line.strip().startswith(f"{key_name} =") or line.strip().startswith(f"{key_name}="):
-                    new_lines.append(f'{key_name} = {json.dumps(value_str)}\n')
-                    found = True
-                else:
-                    new_lines.append(line)
-                    
-            if not found:
-                new_lines.append(f'{key_name} = {json.dumps(value_str)}\n')
-                
+                try:
+                    data = toml.load(secrets_file)
+                except Exception:
+                    pass
+            data[key_name] = value_str
             with open(secrets_file, "w") as sf:
-                sf.writelines(new_lines)
+                toml.dump(data, sf)
         except OSError as e:
             if e.errno == 30:
                 st.session_state["read_only_fs"] = True
@@ -563,9 +644,10 @@ with tab_gmail:
 
             if mail:
                 alert_emails = []
-                with st.spinner("🔍 Searching for LinkedIn & Indeed job alert emails..."):
-                    # Search Indeed with subject fallback
+                with st.spinner("🔍 Searching for job alert emails (Indeed, Glassdoor, LinkedIn)..."):
                     seen_ids = set()
+                    
+                    # Indeed
                     status_ind, data_ind = mail.search(None, 'FROM "indeed"')
                     if status_ind == "OK" and data_ind[0]:
                         for msg_id in data_ind[0].split():
@@ -579,35 +661,41 @@ with tab_gmail:
                             if msg_id not in seen_ids:
                                 seen_ids.add(msg_id)
                                 alert_emails.append((msg_id, "Indeed"))
-                    
-                    # Search LinkedIn with subject fallback
+                                
+                    # Glassdoor
+                    status_gd, data_gd = mail.search(None, 'FROM "glassdoor"')
+                    if status_gd == "OK" and data_gd[0]:
+                        for msg_id in data_gd[0].split():
+                            if msg_id not in seen_ids:
+                                seen_ids.add(msg_id)
+                                alert_emails.append((msg_id, "Glassdoor"))
+                                
+                    status_gd_sb, data_gd_sb = mail.search(None, 'SUBJECT "Glassdoor"')
+                    if status_gd_sb == "OK" and data_gd_sb[0]:
+                        for msg_id in data_gd_sb[0].split():
+                            if msg_id not in seen_ids:
+                                seen_ids.add(msg_id)
+                                alert_emails.append((msg_id, "Glassdoor"))
+                                
+                    # LinkedIn
                     status_li, data_li = mail.search(None, 'FROM "linkedin"')
                     if status_li == "OK" and data_li[0]:
                         for msg_id in data_li[0].split():
                             if msg_id not in seen_ids:
                                 seen_ids.add(msg_id)
                                 alert_emails.append((msg_id, "LinkedIn"))
-                                
-                    status_li_fb, data_li_fb = mail.search(None, 'SUBJECT "LinkedIn"')
-                    if status_li_fb == "OK" and data_li_fb[0]:
-                        for msg_id in data_li_fb[0].split():
-                            if msg_id not in seen_ids:
-                                seen_ids.add(msg_id)
-                                alert_emails.append((msg_id, "LinkedIn"))
 
                 if not alert_emails:
-                    st.warning("No recent job alert emails found from Indeed or LinkedIn.")
+                    st.warning("No recent job alert emails (Indeed, Glassdoor, LinkedIn) found.")
                     mail.logout()
                 else:
-                    # Sort by message ID descending (most recent first)
                     alert_emails = sorted(alert_emails, key=lambda x: int(x[0]), reverse=True)[:scan_limit]
-                    st.info(f"Found {len(alert_emails)} recent job alert emails to process!")
+                    st.info(f"Found {len(alert_emails)} recent alert emails. Extracting job links...")
                     
                     progress_gmail = st.progress(0)
                     all_jobs_scraped = []
                     
                     for idx, (msg_id, source) in enumerate(alert_emails):
-                        # Fetch email
                         res, msg_data = mail.fetch(msg_id, "(RFC822)")
                         if res != "OK":
                             continue
@@ -615,12 +703,10 @@ with tab_gmail:
                         raw_email = msg_data[0][1]
                         msg = email.message_from_bytes(raw_email)
                         
-                        # Extract subject
                         subject, encoding = decode_header(msg["Subject"])[0]
                         if isinstance(subject, bytes):
                             subject = subject.decode(encoding or "utf-8", errors="ignore")
                             
-                        # Extract body (prefer HTML to capture links, preserve anchors)
                         body = ""
                         html_content = ""
                         plain_content = ""
@@ -648,27 +734,22 @@ with tab_gmail:
                                 pass
                                 
                         if html_content:
-                            # Strip head, style, and script blocks (including their contents)
                             clean_html = re.sub(r'<head\b[^>]*>([\s\S]*?)</head>', ' ', html_content, flags=re.IGNORECASE)
                             clean_html = re.sub(r'<style\b[^>]*>([\s\S]*?)</style>', ' ', clean_html, flags=re.IGNORECASE)
                             clean_html = re.sub(r'<script\b[^>]*>([\s\S]*?)</script>', ' ', clean_html, flags=re.IGNORECASE)
                             
-                            # Transform <a href="url">text</a> into text (url)
                             processed_html = re.sub(
                                 r'<a\s+[^>]*?href=["\']([^"\']*)["\'][^>]*>(.*?)</a>',
                                 r'\2 (\1)',
                                 clean_html,
                                 flags=re.IGNORECASE | re.DOTALL
                             )
-                            # Strip all HTML tags
                             body = re.sub(r'<[^<]+?>', ' ', processed_html)
                         else:
                             body = plain_content
                             
-                        # Token cleanup
-                        body_cleaned = " ".join(body.split())[:12000] # Cap size for Gemini context
+                        body_cleaned = " ".join(body.split())[:12000]
                         
-                        # Use Gemini to extract jobs from the alert body
                         extract_prompt = f"""
                         Extract all job listings from the following email content.
                         Email Source: {source}
@@ -683,151 +764,310 @@ with tab_gmail:
                             "title": "Job Title",
                             "company": "Company Name",
                             "location": "Location",
-                            "description": "Short summary or requirements excerpt",
-                            "apply_link": "Application link or view button URL"
+                            "apply_link": "Application link or view job URL"
                           }}
                         ]
                         Only return a valid JSON array.
                         """
                         try:
+                            # Sleep to avoid hitting 15 RPM API rate limit
+                            import time
+                            if idx > 0:
+                                time.sleep(4.5)
                             gemini_extracted = query_gemini(extract_prompt, response_json=True)
-                            if not gemini_extracted:
-                                raise ValueError("API Key limit exceeded or request failed.")
-                            parsed_jobs = json.loads(gemini_extracted.strip())
-                            if isinstance(parsed_jobs, list):
-                                for pj in parsed_jobs:
-                                    pj["source"] = source
-                                    all_jobs_scraped.append(pj)
+                            if gemini_extracted:
+                                parsed_jobs = json.loads(gemini_extracted.strip())
+                                if isinstance(parsed_jobs, list):
+                                    for pj in parsed_jobs:
+                                        pj["source"] = source
+                                        if pj.get("apply_link") and pj.get("apply_link") != "https://www.google.com":
+                                            all_jobs_scraped.append(pj)
+                            else:
+                                st.warning(f"⚠️ Gemini API rate limit or error encountered for email {idx+1}. Skipping.")
                         except Exception as parse_e:
-                            pass
+                            st.error(f"❌ Error parsing email {idx+1}: {parse_e}")
                             
                         progress_gmail.progress(int((idx + 1) / len(alert_emails) * 100))
                     
                     mail.logout()
                     
                     if not all_jobs_scraped:
-                        st.warning("No structured jobs could be extracted from the emails.")
+                        st.warning("No structured job links could be extracted from your emails.")
                     else:
-                        st.success(f"Parsed {len(all_jobs_scraped)} total jobs from your alerts! Scoring suitability...")
-                        
-                        progress_grade = st.progress(0)
-                        evaluated_rows = []
-                        cand_profile = load_profile()
-                        
-                        for idx, job in enumerate(all_jobs_scraped):
-                            job_title = job.get("title", "Unknown Title")
-                            company = job.get("company", "Unknown Company")
-                            job_loc = job.get("location", "Unknown Location")
-                            job_desc = job.get("description", "")
-                            apply_link = job.get("apply_link", "https://www.google.com")
-                            source_board = job.get("source", "Alert")
+                        st.session_state["jobs_scraped_links"] = all_jobs_scraped
+                        st.success(f"🎉 Successfully extracted {len(all_jobs_scraped)} job links from your Gmail Indeed alerts!")
+                        st.rerun()
+
+    # Display selection of extracted links
+    scraped_links = st.session_state.get("jobs_scraped_links", [])
+    if scraped_links:
+        st.markdown("### 📋 Extracted Indeed Job Alert Links")
+        st.write("Select which job links you want to open in a visible Chrome browser, extract full job descriptions, and evaluate against your profile.")
+        
+        selected_jobs = []
+        for idx, job in enumerate(scraped_links):
+            chk = st.checkbox(f"**{job['title']}** at **{job['company']}** ({job['location']})", value=True, key=f"chk_job_{idx}")
+            st.caption(f"🔗 [View Original Job Link]({job['apply_link']})")
+            if chk:
+                selected_jobs.append(job)
+                
+        chrome_btn = st.button("🌐 Open & Analyze Selected in Visible Chrome", type="primary", use_container_width=True)
+        if chrome_btn:
+            if not selected_jobs:
+                st.error("Please select at least one job to process!")
+            else:
+                progress_bar = st.progress(0)
+                evaluated_rows = []
+                cand_profile = load_profile()
+                
+                from playwright.sync_api import sync_playwright
+                import time
+                
+                for idx, job in enumerate(selected_jobs):
+                    job_title = job.get("title", "Unknown Title")
+                    company = job.get("company", "Unknown Company")
+                    job_loc = job.get("location", "Unknown Location")
+                    apply_link = job.get("apply_link", "")
+                    source_board = job.get("source", "Indeed")
+                    
+                    st.write(f"🔄 Opening visible Chrome and navigating to **{job_title}** at **{company}**...")
+                    
+                    full_desc = ""
+                    try:
+                        with sync_playwright() as p:
+                            # Launch headed (visible Chrome browser)
+                            browser = p.chromium.launch(headless=False)
+                            context = browser.new_context(
+                                viewport={"width": 1280, "height": 800},
+                                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                            )
+                            page = context.new_page()
+                            page.goto(apply_link, wait_until="domcontentloaded", timeout=45000)
+                            time.sleep(5)  # Let user see the page and bypass Cloudflare if needed
                             
-                            prompt = f"""
-                            Compare this job listing against the candidate's profile:
-                            Candidate Profile:
-                            - Target Titles: {cand_profile.get('target_titles')}
-                            - Experience: {cand_profile.get('experience')}
-                            - Core Skills: {cand_profile.get('skills')}
-                            - Salary Target: {cand_profile.get('salary')}
-                            - Resume details: {cand_profile.get('resume')}
-
-                            Job Listing:
-                            - Title: {job_title}
-                            - Company: {company}
-                            - Location: {job_loc}
-                            - Source: {source_board}
-                            - Description: {job_desc}
-
-                            Analyze suitability. Output STRICTLY in JSON format:
-                            {{
-                              "suitability_score": 85,
-                              "recommendation": "Strong Match",
-                              "key_matches": ["matching skill 1", "2"],
-                              "gaps": ["missing skill 1", "2"],
-                              "pros": ["pro 1", "2"],
-                              "cons": ["con 1", "2"]
-                            }}
-                            Only return valid JSON.
-                            """
-                            try:
-                                gemini_res = query_gemini(prompt, response_json=True)
-                                if not gemini_res:
-                                    raise ValueError("API Key limit exceeded or request failed.")
-                                eval_data = json.loads(gemini_res.strip())
-                            except Exception:
-                                eval_data = {
-                                    "suitability_score": 50,
-                                    "recommendation": "N/A",
-                                    "key_matches": [],
-                                    "gaps": [],
-                                    "pros": [],
-                                    "cons": []
-                                }
+                            # Extract salary information explicitly from header cards
+                            salary_text = ""
+                            salary_selectors = [
+                                "div[data-testid='jobsearch-JobDescriptionSection-section-pay']",
+                                ".salary-snippet-container",
+                                ".jobsearch-JobMetadataHeader-item",
+                                "div.salary-snippet",
+                                ".jobsearch-JobComponent"
+                            ]
+                            for ss in salary_selectors:
+                                try:
+                                    loc = page.locator(ss)
+                                    if loc.count() > 0:
+                                        t = loc.first.inner_text().strip()
+                                        if t and any(char.isdigit() for char in t) and ("$" in t or "year" in t or "hour" in t or "Pay" in t or "Salary" in t):
+                                            if "\n" in t:
+                                                for line in t.split("\n"):
+                                                    if "$" in line and any(char.isdigit() for char in line):
+                                                        salary_text = f"Salary/Pay Info: {line}\n"
+                                                        break
+                                            else:
+                                                salary_text = f"Salary/Pay Info: {t}\n"
+                                            if salary_text:
+                                                break
+                                except:
+                                    pass
+                                    
+                            selectors = [
+                                "#jobDescriptionText",
+                                ".jobsearch-JobComponent-description",
+                                "div.jobsearch-jobDescriptionText",
+                                "body"
+                            ]
+                            for s in selectors:
+                                try:
+                                    locator = page.locator(s)
+                                    if locator.count() > 0:
+                                        text = locator.first.inner_text()
+                                        if text and len(text.strip()) > 100:
+                                            full_desc = text.strip()
+                                            break
+                                except:
+                                    pass
+                            if not full_desc:
+                                full_desc = page.locator("body").inner_text()
                                 
-                            evaluated_rows.append({
-                                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "Title": job_title,
-                                "Company": company,
-                                "Location": job_loc,
-                                "Source": source_board,
-                                "Score": eval_data.get("suitability_score", 50),
-                                "Recommendation": eval_data.get("recommendation", "N/A"),
-                                "Key Matches": ", ".join(eval_data.get("key_matches", [])),
-                                "Gaps": ", ".join(eval_data.get("gaps", [])),
-                                "Pros": ", ".join(eval_data.get("pros", [])),
-                                "Cons": ", ".join(eval_data.get("cons", [])),
-                                "Apply Link": apply_link
-                            })
-                            progress_grade.progress(int((idx + 1) / len(all_jobs_scraped) * 100))
-                            
-                        # Sort by Match Score Descending
-                        evaluated_rows = sorted(evaluated_rows, key=lambda x: x["Score"], reverse=True)
+                            if salary_text and salary_text not in full_desc:
+                                full_desc = salary_text + "\n" + full_desc
+                            browser.close()
+                    except Exception as e:
+                        st.warning(f"⚠️ Visible Chrome browser scraping failed for this link: {e}")
+                        full_desc = ""
                         
-                        # Post to Google Sheet
-                        with st.spinner("📊 Posting ranked listings to Google Sheets..."):
-                            client = sheets_helper.get_gspread_client()
-                            if client:
-                                spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
-                                if spreadsheet:
-                                    # Create/Get Ranked_Job_Alerts worksheet
-                                    sheet_name = "Ranked_Job_Alerts"
-                                    try:
-                                        wks = spreadsheet.worksheet(sheet_name)
-                                        existing_rows = wks.get_all_records()
-                                        # Deduplicate based on Title & Company combo
-                                        existing_keys = {f"{r.get('Title','')}|{r.get('Company','')}".strip().lower() for r in existing_rows}
-                                    except gspread.exceptions.WorksheetNotFound:
-                                        # headers
-                                        headers = ["Timestamp", "Title", "Company", "Location", "Source", "Score", "Recommendation", "Key Matches", "Gaps", "Pros", "Cons", "Apply Link"]
-                                        wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(headers)))
-                                        wks.append_row(headers)
-                                        existing_keys = set()
-                                        
-                                    rows_to_add = []
-                                    for r in evaluated_rows:
-                                        key = f"{r['Title']}|{r['Company']}".strip().lower()
-                                        if key in existing_keys:
-                                            continue
-                                        rows_to_add.append([
-                                            r["Timestamp"], r["Title"], r["Company"], r["Location"], r["Source"],
-                                            str(r["Score"]), r["Recommendation"], r["Key Matches"], r["Gaps"],
-                                            r["Pros"], r["Cons"], r["Apply Link"]
-                                        ])
-                                        
-                                    if rows_to_add:
-                                        wks.append_rows(rows_to_add, value_input_option="USER_ENTERED")
-                                        st.success(f"🎉 Successfully posted {len(rows_to_add)} new ranked listings to your Google Sheet '{sheet_name}'!")
-                                    else:
-                                        st.info("ℹ️ All alerts parsed are already synced to the Google Sheet.")
-                                        
-                        # Visual display
-                        st.subheader("📋 Parsed Alert Results")
-                        for idx, job in enumerate(evaluated_rows):
-                            st.write(f"**{idx+1}. {job['Title']}** at **{job['Company']}** ({job['Score']}% Match)")
-                            st.caption(f"📍 {job['Location']} | Source: {job['Source']}")
-                            st.write(f"*Recommendation:* {job['Recommendation']}")
-                            st.write(f"*Apply Link:* {job['Apply Link']}")
-                            st.write("---")
+                    if not full_desc or len(full_desc.strip()) < 50:
+                        st.error(f"Could not extract description for **{job_title}**.")
+                        continue
+                        
+                    st.success(f"✅ Successfully extracted {len(full_desc)} characters of details. Comparing against your Accounting profile...")
+                    
+                    prompt = f"""
+                    Compare this job listing against the candidate's profile:
+                    Candidate Profile:
+                    - Target Titles: {cand_profile.get('target_titles')}
+                    - Experience: {cand_profile.get('experience')}
+                    - Core Skills: {cand_profile.get('skills')}
+                    - Salary Target: {cand_profile.get('salary')}
+                    - Resume details: {cand_profile.get('resume')}
+
+                    Job Listing:
+                    - Title: {job_title}
+                    - Company: {company}
+                    - Location: {job_loc}
+                    - Source: {source_board}
+                    - Description: {full_desc}
+
+                    Analyze suitability. Output STRICTLY in JSON format:
+                    {{
+                      "suitability_score": 85,
+                      "recommendation": "Strong Match",
+                      "employment_type": "Full-Time, Part-Time, Contract, otherwise 'Not Mentioned'",
+                      "work_mode": "On-site, Remote, Hybrid, otherwise 'Not Mentioned'",
+                      "experience_required": "Years of experience required, otherwise 'Not Mentioned'",
+                      "education": "Required education (e.g. Degree/Diploma in Accounting), otherwise 'Not Mentioned'",
+                      "cpa_requirement": "CPA requirement or status (e.g. CPA Student, CPA Designated), otherwise 'Not Mentioned'",
+                      "tax_experience": "Tax preparation requirements (e.g. T1, T2), otherwise 'Not Mentioned'",
+                      "financial_statements": "Yes or No",
+                      "year_end": "Yes or No",
+                      "payroll": "Yes or No",
+                      "gst_pst_wcb": "Comma-separated list of GST, PST, WCB requirements, otherwise 'Not Mentioned'",
+                      "government_filing": "CRA Online Filing, etc. if mentioned, otherwise 'Not Mentioned'",
+                      "software": "Comma-separated list of software (e.g. CaseWare, Excel, QuickBooks), otherwise 'Not Mentioned'",
+                      "client_interaction": "Yes or No",
+                      "other_requirements": "Other critical requirements (e.g. PR Card Required), otherwise 'Not Mentioned'",
+                      "salary": "Salary or pay range, otherwise 'Not Mentioned'",
+                      "gaps_roadmap": "A summary of any missing skills (e.g. CaseWare, QuickBooks, driver's license) and a quick recommendation on how to learn them, otherwise 'None'"
+                    }}
+                    
+                    CRITICAL CONSTRAINT RULE: If the job description explicitly lists a language fluency requirement (e.g. Mandarin, Cantonese, French, Punjabi) that the candidate's resume/profile does not list or support, treat this as a CRITICAL unmet hard constraint. Reduce the suitability_score below 40% and set the recommendation to "Weak Match" or "Not Suitable".
+                    
+                    Only return valid JSON.
+                    """
+                    
+                    try:
+                        gemini_res = query_gemini(prompt, response_json=True)
+                        eval_data = json.loads(gemini_res.strip())
+                    except Exception:
+                        eval_data = {
+                            "suitability_score": 50,
+                            "recommendation": "N/A",
+                            "employment_type": "Not Mentioned",
+                            "work_mode": "Not Mentioned",
+                            "experience_required": "Not Mentioned",
+                            "education": "Not Mentioned",
+                            "cpa_requirement": "Not Mentioned",
+                            "tax_experience": "Not Mentioned",
+                            "financial_statements": "Not Mentioned",
+                            "year_end": "Not Mentioned",
+                            "payroll": "Not Mentioned",
+                            "gst_pst_wcb": "Not Mentioned",
+                            "government_filing": "Not Mentioned",
+                            "software": "Not Mentioned",
+                            "client_interaction": "Not Mentioned",
+                            "other_requirements": "Not Mentioned",
+                            "salary": "Not Mentioned",
+                            "gaps_roadmap": "None"
+                        }
+                        
+                    evaluated_rows.append({
+                        "Date Found": datetime.now().strftime("%Y-%m-%d"),
+                        "Source": source_board,
+                        "Job Title": job_title,
+                        "Company": company,
+                        "Location": job_loc,
+                        "Salary": eval_data.get("salary", "Not Mentioned"),
+                        "Employment Type": eval_data.get("employment_type", "Not Mentioned"),
+                        "Work Mode": eval_data.get("work_mode", "Not Mentioned"),
+                        "Experience Required": eval_data.get("experience_required", "Not Mentioned"),
+                        "Education": eval_data.get("education", "Not Mentioned"),
+                        "CPA Requirement": eval_data.get("cpa_requirement", "Not Mentioned"),
+                        "Tax Experience": eval_data.get("tax_experience", "Not Mentioned"),
+                        "Financial Statements": eval_data.get("financial_statements", "Not Mentioned"),
+                        "Year-End": eval_data.get("year_end", "Not Mentioned"),
+                        "Payroll": eval_data.get("payroll", "Not Mentioned"),
+                        "GST/PST/WCB": eval_data.get("gst_pst_wcb", "Not Mentioned"),
+                        "Government Filing": eval_data.get("government_filing", "Not Mentioned"),
+                        "Software": eval_data.get("software", "Not Mentioned"),
+                        "Client Interaction": eval_data.get("client_interaction", "Not Mentioned"),
+                        "Other Requirements": eval_data.get("other_requirements", "Not Mentioned"),
+                        "Score": eval_data.get("suitability_score", 50),
+                        "Recommendation": eval_data.get("recommendation", "N/A"),
+                        "Apply Link": apply_link,
+                        "Gaps / Roadmap": eval_data.get("gaps_roadmap", "None")
+                    })
+                    progress_bar.progress(int((idx + 1) / len(selected_jobs) * 100))
+                    
+                # Post to Google Sheets
+                if evaluated_rows:
+                    with st.spinner("📊 Posting ranked listings to Google Sheets..."):
+                        client = sheets_helper.get_gspread_client()
+                        if client:
+                            spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                            if spreadsheet:
+                                sheet_name = "Ranked_Job_Alerts"
+                                headers = ["Date Found", "Source", "Job Title", "Company", "Location", "Salary", "Employment Type", "Work Mode", "Experience Required", "Education", "CPA Requirement", "Tax Experience", "Financial Statements", "Year-End", "Payroll", "GST/PST/WCB", "Government Filing", "Software", "Client Interaction", "Other Requirements", "Score", "Recommendation", "Apply Link", "Gaps / Roadmap"]
+                                try:
+                                    wks = spreadsheet.worksheet(sheet_name)
+                                    existing_rows = wks.get_all_records()
+                                    existing_keys = {f"{r.get('Job Title','')}|{r.get('Company','')}".strip().lower() for r in existing_rows}
+                                    
+                                    # Ensure headers contain critical columns
+                                    first_row = wks.row_values(1)
+                                    if "Work Mode" not in first_row or "GST/PST/WCB" not in first_row or "Gaps / Roadmap" not in first_row:
+                                        for col_idx, header_val in enumerate(headers, 1):
+                                            try:
+                                                wks.update_cell(1, col_idx, header_val)
+                                            except:
+                                                pass
+                                except Exception:
+                                    wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(headers)))
+                                    wks.append_row(headers)
+                                    existing_keys = set()
+                                    
+                                rows_to_add = []
+                                for r in evaluated_rows:
+                                    key = f"{r['Job Title']}|{r['Company']}".strip().lower()
+                                    if key in existing_keys:
+                                        continue
+                                    rows_to_add.append([
+                                        r["Date Found"], r["Source"], r["Job Title"], r["Company"], r["Location"],
+                                        r["Salary"], r["Employment Type"], r["Work Mode"], r["Experience Required"],
+                                        r["Education"], r["CPA Requirement"], r["Tax Experience"], r["Financial Statements"],
+                                        r["Year-End"], r["Payroll"], r["GST/PST/WCB"], r["Government Filing"],
+                                        r["Software"], r["Client Interaction"], r["Other Requirements"],
+                                        str(r["Score"]), r["Recommendation"], f'=HYPERLINK("{r["Apply Link"]}", "Apply")',
+                                        r.get("Gaps / Roadmap", "None")
+                                    ])
+                                if rows_to_add:
+                                    wks.append_rows(rows_to_add, value_input_option="USER_ENTERED")
+                                    st.success(f"🎉 Successfully posted {len(rows_to_add)} new ranked listings to your Google Sheet '{sheet_name}'!")
+                                else:
+                                    st.info("ℹ️ All alerts parsed are already synced to the Google Sheet.")
+                                    
+                    st.session_state["jobs_scraped_links"] = []  # Clear processed queue
+                    
+                    st.subheader("📋 Scraping & Suitability Analysis Results")
+                    for r in evaluated_rows:
+                        st.markdown(f"### **{r['Job Title']}** at **{r['Company']}**")
+                        st.write(f"- **Match Score**: **{r['Score']}%** ({r['Recommendation']})")
+                        st.write(f"- **Location**: {r['Location']} | **Source**: {r['Source']}")
+                        st.write(f"- **Work Mode**: {r['Work Mode']} | **Employment Type**: {r['Employment Type']}")
+                        st.write(f"- **Salary**: {r['Salary']}")
+                        st.write(f"- **Software**: {r['Software']}")
+                        st.write(f"- **Tax Experience**: {r['Tax Experience']}")
+                        # Extracted formula contains '=HYPERLINK("url", "Apply")', extract the clean url to link in st.write
+                        clean_url = r['Apply Link']
+                        if 'HYPERLINK' in clean_url:
+                            # Extract url from '=HYPERLINK("url", "Apply")'
+                            try:
+                                clean_url = clean_url.split('"')[1]
+                            except:
+                                pass
+                        st.write(f"- [Apply Link]({clean_url})")
+                        st.write("---")
 
 with tab_gap:
     st.subheader("🎯 Single Job Skill Gap Analyzer")
@@ -841,25 +1081,26 @@ with tab_gap:
         
     job_desc_input = st.text_area("Or, paste the Job Description text directly", height=200, placeholder="Paste job description details here...", key="gap_desc")
     
-    analyze_gap_btn = st.button("🔍 Analyze Skill Gaps & Generate Roadmap", type="primary", use_container_width=True)
+    col_gap_btn1, col_gap_btn2 = st.columns(2)
+    with col_gap_btn1:
+        analyze_gap_btn = st.button("🔍 Analyze Skill Gaps & Generate Roadmap", type="secondary", use_container_width=True)
+    with col_gap_btn2:
+        analyze_save_btn = st.button("🚀 Analyze & Save to Google Sheets", type="primary", use_container_width=True)
     
-    if analyze_gap_btn:
+    if analyze_gap_btn or analyze_save_btn:
         cand_profile = load_profile()
         job_desc = ""
         
-        # 1. Try to fetch from URL if provided
-        if job_url_input:
+        if job_desc_input.strip():
+            job_desc = job_desc_input.strip()
+        elif job_url_input:
             with st.spinner("🌐 Attempting to fetch job details from URL..."):
-                fetched_desc = scrape_linkedin_job(job_url_input)
+                fetched_desc = scrape_job_url(job_url_input)
                 if fetched_desc:
                     job_desc = fetched_desc
                     st.success("🎉 Successfully fetched job description from URL!")
                 else:
-                    st.warning("⚠️ Could not scrape the URL automatically. Falling back to pasted description.")
-                    
-        # 2. Use pasted description if URL fetch failed or wasn't provided
-        if not job_desc:
-            job_desc = job_desc_input
+                    st.warning("⚠️ Could not scrape the URL automatically. Please make sure the URL is valid or paste the description text directly in the box below.")
             
         if not job_desc:
             st.error("❗ Please paste a job URL or copy-paste the Job Description text!")
@@ -881,49 +1122,415 @@ with tab_gap:
                 - Title/Company: {job_title_input}
                 - Content: {job_desc}
 
-                Output STRICTLY in JSON format:
+                Analyze suitability. Output STRICTLY in JSON format:
                 {{
                   "job_title": "extracted job title",
                   "company": "extracted company",
+                  "location": "extracted location if found, otherwise 'Not specified'",
+                  "salary": "extracted salary if found, otherwise 'Not Mentioned'",
+                  "employment_type": "Full-Time, Part-Time, Contract, otherwise 'Not Mentioned'",
+                  "work_mode": "On-site, Remote, Hybrid, otherwise 'Not Mentioned'",
+                  "experience_required": "Years of experience required, otherwise 'Not Mentioned'",
+                  "education": "Required education, otherwise 'Not Mentioned'",
+                  "cpa_requirement": "CPA requirement status, otherwise 'Not Mentioned'",
+                  "tax_experience": "T1, T2 tax prep requirements, otherwise 'Not Mentioned'",
+                  "financial_statements": "Yes or No",
+                  "year_end": "Yes or No",
+                  "payroll": "Yes or No",
+                  "gst_pst_wcb": "GST, PST, WCB requirements, otherwise 'Not Mentioned'",
+                  "government_filing": "CRA Online Filing, etc., otherwise 'Not Mentioned'",
+                  "software": "CaseWare, Excel, QuickBooks, etc., otherwise 'Not Mentioned'",
+                  "client_interaction": "Yes or No",
+                  "other_requirements": "PR Card, reliable vehicle, etc., otherwise 'Not Mentioned'",
+                  "suitability_score": 75,
+                  "recommendation": "Strong Match or Growth Match or Weak Match",
                   "skills_required": ["skill 1", "skill 2"],
                   "matching_skills": ["skill A", "skill B"],
                   "missing_skills": ["skill X", "skill Y"],
                   "learning_roadmap": {{
-                    "skill X": "specific action item or resource to learn skill X",
-                    "skill Y": "specific action item or resource to learn skill Y"
-                  }},
-                  "suitability_score": 85
+                    "skill X": "specific action item to learn skill X",
+                    "skill Y": "specific action item to learn skill Y"
+                  }}
                 }}
+                
+                CRITICAL CONSTRAINT RULE: If the job description explicitly lists a language fluency requirement (e.g. Mandarin, Cantonese, French, Punjabi) that the candidate's resume/profile does not list or support, treat this as a CRITICAL unmet hard constraint. Reduce the suitability_score below 40% and set the recommendation to "Weak Match" or "Not Suitable".
+                
                 Only return valid JSON. Do not include markdown code blocks or formatting.
                 """
                 try:
                     res = query_gemini(prompt, response_json=True)
                     if not res:
-                        st.error("❌ Failed to analyze skill gaps: Google AI Studio API Key daily request limit exceeded. Please get a fresh API key from Google AI Studio and paste it in the sidebar.")
+                        st.error("❌ Failed to analyze skill gaps.")
                     else:
                         gap_data = json.loads(res.strip())
-                    
-                    st.subheader(f"📊 Analysis: {gap_data.get('job_title', 'Job')} at {gap_data.get('company', 'Employer')}")
-                    st.metric("Suitability Score", f"{gap_data.get('suitability_score', 0)}%")
-                    
-                    col_m1, col_m2 = st.columns(2)
-                    with col_m1:
-                        st.success("✅ Matching Skills (You have these!)")
-                        for s in gap_data.get("matching_skills", []):
-                            st.write(f"- {s}")
-                            
-                    with col_m2:
-                        st.error("❌ Missing Skills / Gaps (Employer requires these!)")
-                        for s in gap_data.get("missing_skills", []):
-                            st.write(f"- {s}")
-                            
-                    st.subheader("📚 Recommended Learning Roadmap")
-                    roadmap = gap_data.get("learning_roadmap", {})
-                    if roadmap:
-                        for skill, path in roadmap.items():
-                            st.info(f"**How to learn {skill}:**\n{path}")
-                    else:
-                        st.success("🎉 You meet all skill requirements for this position!")
+                        st.session_state["gap_data"] = gap_data
+                        st.session_state["gap_job_desc"] = job_desc
+                        st.session_state["gap_url"] = job_url_input
                         
+                        if analyze_save_btn:
+                            with st.spinner("📊 Posting to Google Sheets..."):
+                                client = sheets_helper.get_gspread_client()
+                                if client:
+                                    spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                                    if spreadsheet:
+                                        sheet_name = "Ranked_Job_Alerts"
+                                        headers = ["Date Found", "Source", "Job Title", "Company", "Location", "Salary", "Employment Type", "Work Mode", "Experience Required", "Education", "CPA Requirement", "Tax Experience", "Financial Statements", "Year-End", "Payroll", "GST/PST/WCB", "Government Filing", "Software", "Client Interaction", "Other Requirements", "Score", "Recommendation", "Apply Link", "Gaps / Roadmap"]
+                                        try:
+                                            wks = spreadsheet.worksheet(sheet_name)
+                                            first_row = wks.row_values(1)
+                                            if "Work Mode" not in first_row or "GST/PST/WCB" not in first_row or "Gaps / Roadmap" not in first_row:
+                                                for col_idx, header_val in enumerate(headers, 1):
+                                                    try:
+                                                        wks.update_cell(1, col_idx, header_val)
+                                                    except:
+                                                        pass
+                                        except Exception:
+                                            wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(headers)))
+                                            wks.append_row(headers)
+                                            
+                                        gaps_val = "Gaps: " + ", ".join(gap_data.get("missing_skills", []))
+                                        roadmap_details = "; ".join([f"How to learn {k}: {v}" for k, v in gap_data.get("learning_roadmap", {}).items()])
+                                        gaps_roadmap_val = f"{gaps_val} | Roadmap: {roadmap_details}" if roadmap_details else gaps_val
+                                        
+                                        row = [
+                                            datetime.now().strftime("%Y-%m-%d"),
+                                            "Direct URL" if job_url_input else "Manual Paste",
+                                            gap_data.get("job_title", "Unknown Title"),
+                                            gap_data.get("company", "Unknown Company"),
+                                            gap_data.get("location", "Unknown Location"),
+                                            gap_data.get("salary", "Not Mentioned"),
+                                            gap_data.get("employment_type", "Not Mentioned"),
+                                            gap_data.get("work_mode", "Not Mentioned"),
+                                            gap_data.get("experience_required", "Not Mentioned"),
+                                            gap_data.get("education", "Not Mentioned"),
+                                            gap_data.get("cpa_requirement", "Not Mentioned"),
+                                            gap_data.get("tax_experience", "Not Mentioned"),
+                                            gap_data.get("financial_statements", "Not Mentioned"),
+                                            gap_data.get("year_end", "Not Mentioned"),
+                                            gap_data.get("payroll", "Not Mentioned"),
+                                            gap_data.get("gst_pst_wcb", "Not Mentioned"),
+                                            gap_data.get("government_filing", "Not Mentioned"),
+                                            gap_data.get("software", "Not Mentioned"),
+                                            gap_data.get("client_interaction", "Not Mentioned"),
+                                            gap_data.get("other_requirements", "Not Mentioned"),
+                                            str(gap_data.get("suitability_score", 50)),
+                                            gap_data.get("recommendation", "N/A"),
+                                            f'=HYPERLINK("{job_url_input}", "Apply")' if job_url_input else "N/A",
+                                            gaps_roadmap_val
+                                        ]
+                                        try:
+                                            wks.append_row(row, value_input_option="USER_ENTERED")
+                                            st.success("🎉 Successfully posted and saved this job to your Google Sheet!")
+                                        except Exception as err:
+                                            st.error(f"❌ Failed to append row: {err}")
                 except Exception as e:
                     st.error(f"❌ Failed to parse gap analysis: {e}")
+                    
+    # Render results from session state if available
+    if "gap_data" in st.session_state:
+        gap_data = st.session_state["gap_data"]
+        job_desc = st.session_state["gap_job_desc"]
+        job_url_input = st.session_state.get("gap_url", "")
+        
+        st.subheader(f"📊 Analysis: {gap_data.get('job_title', 'Job')} at {gap_data.get('company', 'Employer')}")
+        st.metric("Suitability Score", f"{gap_data.get('suitability_score', 0)}%")
+        
+        with st.expander("📄 View Extracted Job Description & Details", expanded=False):
+            st.markdown(f"**Extracted Job Title**: {gap_data.get('job_title', 'Not specified')}")
+            st.markdown(f"**Extracted Company**: {gap_data.get('company', 'Not specified')}")
+            st.markdown(f"**Extracted Location**: {gap_data.get('location', 'Not specified')}")
+            st.text_area("Extracted Text Content", value=job_desc, height=250, disabled=True)
+            
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.success("✅ Matching Skills (You have these!)")
+            for s in gap_data.get("matching_skills", []):
+                st.write(f"- {s}")
+                
+        with col_m2:
+            st.error("❌ Missing Skills / Gaps (Employer requires these!)")
+            for s in gap_data.get("missing_skills", []):
+                st.write(f"- {s}")
+                
+        st.subheader("📚 Recommended Learning Roadmap")
+        roadmap = gap_data.get("learning_roadmap", {})
+        if roadmap:
+            for skill, path in roadmap.items():
+                st.info(f"**How to learn {skill}:**\n{path}")
+        else:
+            st.success("🎉 You meet all skill requirements for this position!")
+            
+        st.write("---")
+        st.subheader("💾 Save to Google Sheets")
+        save_btn = st.button("📤 Post this Job & Analysis to Google Sheets", key="save_gap_to_sheet")
+        
+        if save_btn:
+            with st.spinner("📊 Posting to Google Sheets..."):
+                client = sheets_helper.get_gspread_client()
+                if client:
+                    spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                    if spreadsheet:
+                        sheet_name = "Ranked_Job_Alerts"
+                        headers = ["Date Found", "Source", "Job Title", "Company", "Location", "Salary", "Employment Type", "Work Mode", "Experience Required", "Education", "CPA Requirement", "Tax Experience", "Financial Statements", "Year-End", "Payroll", "GST/PST/WCB", "Government Filing", "Software", "Client Interaction", "Other Requirements", "Score", "Recommendation", "Apply Link", "Gaps / Roadmap"]
+                        try:
+                            wks = spreadsheet.worksheet(sheet_name)
+                            first_row = wks.row_values(1)
+                            if "Work Mode" not in first_row or "GST/PST/WCB" not in first_row or "Gaps / Roadmap" not in first_row:
+                                for col_idx, header_val in enumerate(headers, 1):
+                                    try:
+                                        wks.update_cell(1, col_idx, header_val)
+                                    except:
+                                        pass
+                        except Exception:
+                            wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(headers)))
+                            wks.append_row(headers)
+                            
+                        gaps_val = "Gaps: " + ", ".join(gap_data.get("missing_skills", []))
+                        roadmap_details = "; ".join([f"How to learn {k}: {v}" for k, v in gap_data.get("learning_roadmap", {}).items()])
+                        gaps_roadmap_val = f"{gaps_val} | Roadmap: {roadmap_details}" if roadmap_details else gaps_val
+                        
+                        row = [
+                            datetime.now().strftime("%Y-%m-%d"),
+                            "Direct URL" if job_url_input else "Manual Paste",
+                            gap_data.get("job_title", "Unknown Title"),
+                            gap_data.get("company", "Unknown Company"),
+                            gap_data.get("location", "Unknown Location"),
+                            gap_data.get("salary", "Not Mentioned"),
+                            gap_data.get("employment_type", "Not Mentioned"),
+                            gap_data.get("work_mode", "Not Mentioned"),
+                            gap_data.get("experience_required", "Not Mentioned"),
+                            gap_data.get("education", "Not Mentioned"),
+                            gap_data.get("cpa_requirement", "Not Mentioned"),
+                            gap_data.get("tax_experience", "Not Mentioned"),
+                            gap_data.get("financial_statements", "Not Mentioned"),
+                            gap_data.get("year_end", "Not Mentioned"),
+                            gap_data.get("payroll", "Not Mentioned"),
+                            gap_data.get("gst_pst_wcb", "Not Mentioned"),
+                            gap_data.get("government_filing", "Not Mentioned"),
+                            gap_data.get("software", "Not Mentioned"),
+                            gap_data.get("client_interaction", "Not Mentioned"),
+                            gap_data.get("other_requirements", "Not Mentioned"),
+                            str(gap_data.get("suitability_score", 50)),
+                            gap_data.get("recommendation", "N/A"),
+                            f'=HYPERLINK("{job_url_input}", "Apply")' if job_url_input else "N/A",
+                            gaps_roadmap_val
+                        ]
+                        try:
+                            wks.append_row(row, value_input_option="USER_ENTERED")
+                            st.success("🎉 Successfully posted and saved this job to your Google Sheet!")
+                        except Exception as err:
+                            st.error(f"❌ Failed to append row: {err}")
+
+with tab_tailor:
+    st.subheader("📄 ATS-Friendly Resume Tailor")
+    st.markdown("Instantly adapt your base resume to highlight matching skills and keywords for a specific job description.")
+    
+    cand_profile = load_profile()
+    base_resume_text = cand_profile.get("resume", "")
+    
+    st.markdown("### 1. Select Target Job")
+    job_option = st.radio("Target Job Source", ["Choose from Google Sheet", "Paste Job Details manually"], key="tailor_source")
+    
+    target_job_desc = ""
+    target_job_title = ""
+    target_company = ""
+    
+    if job_option == "Choose from Google Sheet":
+        gmail_saved = {}
+        try:
+            with open("gmail_config.json", "r", encoding="utf-8") as f:
+                gmail_saved = json.load(f)
+        except:
+            pass
+        sheet_url = st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", "")))
+        
+        if not sheet_url:
+            st.warning("⚠️ Google Spreadsheet URL is not set. Please set it in the sidebar or Gmail Alert Scanner tab.")
+        else:
+            try:
+                client = sheets_helper.get_gspread_client()
+                if client:
+                    spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                    if spreadsheet:
+                        wks = spreadsheet.worksheet("Ranked_Job_Alerts")
+                        records = wks.get_all_records()
+                        if not records:
+                            st.info("ℹ️ No jobs found in your Google Sheet yet.")
+                        else:
+                            job_labels = [f"{r.get('Job Title','Unknown')} at {r.get('Company','Unknown')} ({r.get('Date Found','')})" for r in records]
+                            selected_label_idx = st.selectbox("Select job to tailor for", range(len(job_labels)), format_func=lambda x: job_labels[x], key="tailor_select_job")
+                            selected_record = records[selected_label_idx]
+                            
+                            target_job_title = selected_record.get('Job Title', 'Unknown Title')
+                            target_company = selected_record.get('Company', 'Unknown Company')
+                            
+                            apply_link = selected_record.get('Apply Link', '')
+                            if 'HYPERLINK' in apply_link:
+                                try:
+                                    apply_link = apply_link.split('"')[1]
+                                except:
+                                    pass
+                                    
+                            if apply_link and apply_link != "N/A":
+                                st.write(f"🔗 Job Apply Link: {apply_link}")
+                                fetch_btn = st.button("🌐 Fetch Job Details from Link", key="tailor_fetch_link")
+                                if fetch_btn:
+                                    with st.spinner("Fetching job details..."):
+                                        fetched = scrape_job_url(apply_link)
+                                        if fetched:
+                                            st.session_state["tailor_job_desc"] = fetched
+                                            st.success("🎉 Successfully fetched job description!")
+                                        else:
+                                            st.error("❌ Failed to scrape the URL automatically. Please copy-paste the job text below.")
+                            
+                            target_job_desc = st.text_area("Job Description Details", value=st.session_state.get("tailor_job_desc", ""), height=150, key="tailor_sheet_desc")
+            except Exception as e:
+                st.error(f"❌ Failed to load jobs from Google Sheets: {e}")
+    else:
+        col_t_title, col_t_comp = st.columns(2)
+        with col_t_title:
+            target_job_title = st.text_input("Target Job Title", placeholder="e.g. Junior Accountant", key="t_title")
+        with col_t_comp:
+            target_company = st.text_input("Target Company", placeholder="e.g. Vasto Builders Inc.", key="t_company")
+            
+        target_job_desc = st.text_area("Paste Job Description details here", height=150, key="tailor_manual_desc")
+        
+    st.markdown("### 2. Base Resume / Qualifications")
+    editable_resume = st.text_area("Your Base Resume (Loaded from profile)", value=base_resume_text, height=200, key="tailor_base_resume")
+    
+    st.markdown("### 3. Generate Tailored Resume")
+    tailor_btn = st.button("✨ Tailor my Resume for this Job", type="primary", use_container_width=True)
+    
+    if tailor_btn:
+        if not target_job_desc.strip():
+            st.error("❗ Please select or paste the target job description details first!")
+        elif not editable_resume.strip():
+            st.error("❗ Please provide your base resume text!")
+        elif not gemini_key:
+            st.error("🔑 Please enter your Google AI Studio API Key in the sidebar first!")
+        else:
+            with st.spinner("🤖 Adaptively rewriting experience and optimizing keywords..."):
+                prompt = f"""
+                You are a professional resume writer and ATS optimization expert.
+                Your task is to tailor the candidate's resume to match the target job description.
+                
+                Candidate Profile & Base Resume:
+                {editable_resume}
+                
+                Target Job Description:
+                - Title: {target_job_title}
+                - Company: {target_company}
+                - Content: {target_job_desc}
+                
+                Instructions:
+                1. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize CaseWare, T1/T2, payroll, etc.).
+                2. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles.
+                3. Optimize bullet points using the action-verb + task + result (STAR) format, matching keywords from the job description.
+                4. Format the output in clean, professional Markdown.
+                
+                Only return the tailored resume. Do not include introductory or concluding remarks.
+                """
+                try:
+                    tailored_res = query_gemini(prompt, response_json=False)
+                    if tailored_res:
+                        st.session_state["tailored_resume_text"] = tailored_res
+                    else:
+                        st.error("❌ Failed to tailor resume.")
+                        
+                    cover_prompt = f"""
+                    You are a professional cover letter writer and job application coach.
+                    Your task is to write a highly compelling, professional cover letter tailored to the target job description based on the candidate's resume/profile.
+                    
+                    Candidate Contact Information:
+                    - Name: {cand_profile.get('candidate_name', 'Raman Deep Kumar')}
+                    - Phone: {cand_profile.get('candidate_phone', '604-440-9885')}
+                    - Email: {cand_profile.get('candidate_email', 'beedhtaxservices@outlook.com')}
+                    - LinkedIn: {cand_profile.get('candidate_linkedin', 'https://www.linkedin.com/feed/')}
+                    - Today's Date: {datetime.now().strftime("%B %d, %Y")}
+                    
+                    Candidate Profile & Resume:
+                    {editable_resume}
+                    
+                    Target Job Description:
+                    - Title: {target_job_title}
+                    - Company: {target_company}
+                    - Content: {target_job_desc}
+                    
+                    Instructions:
+                    1. Format the cover letter professionally with standard contact info blocks. Use Today's Date: {datetime.now().strftime("%B %d, %Y")} directly at the very top. Do NOT write placeholders like '[Current Date]'.
+                    2. Use the provided contact details at the top header and in the closing sign-off block.
+                    3. Explicitly tie the candidate's matching accomplishments (e.g. QuickBooks, T1/T2 tax preparation, bookkeeping, CaseWare) to the specific challenges/requirements of the job description.
+                    4. Address key requirements and qualifications from the listing. Make it engaging, professional, and convincing.
+                    5. Keep it under one page (around 250-350 words).
+                    
+                    Only return the cover letter text. Do not include extra markdown comments or introductory conversational remarks.
+                    """
+                    tailored_cover = query_gemini(cover_prompt, response_json=False)
+                    if tailored_cover:
+                        st.session_state["tailored_cover_letter_text"] = tailored_cover
+                        st.success("🎉 Successfully generated tailored Resume & Cover Letter!")
+                    else:
+                        st.error("❌ Failed to generate cover letter.")
+                except Exception as err:
+                    st.error(f"❌ Error during document tailoring: {err}")
+                    
+    if "tailored_resume_text" in st.session_state:
+        st.write("---")
+        st.subheader("✨ Generated Application Documents")
+        
+        tab_res_out, tab_cl_out = st.tabs(["📝 Tailored Resume", "✉️ Tailored Cover Letter"])
+        
+        with tab_res_out:
+            st.markdown(st.session_state["tailored_resume_text"])
+            col_res_down1, col_res_down2 = st.columns(2)
+            with col_res_down1:
+                st.download_button(
+                    label="💾 Download Tailored Resume (.md)",
+                    data=st.session_state["tailored_resume_text"],
+                    file_name=f"tailored_resume_{target_company.replace(' ', '_')}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                    key="dl_res_md"
+                )
+            with col_res_down2:
+                try:
+                    pdf_res_data = convert_markdown_to_pdf(st.session_state["tailored_resume_text"])
+                    st.download_button(
+                        label="📄 Download Tailored Resume (.pdf)",
+                        data=pdf_res_data.getvalue(),
+                        file_name=f"tailored_resume_{target_company.replace(' ', '_')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="dl_res_pdf"
+                    )
+                except Exception as pe:
+                    st.error(f"⚠️ Failed to generate Resume PDF: {pe}")
+                    
+        with tab_cl_out:
+            if "tailored_cover_letter_text" in st.session_state:
+                st.markdown(st.session_state["tailored_cover_letter_text"])
+                col_cl_down1, col_cl_down2 = st.columns(2)
+                with col_cl_down1:
+                    st.download_button(
+                        label="💾 Download Cover Letter (.md)",
+                        data=st.session_state["tailored_cover_letter_text"],
+                        file_name=f"cover_letter_{target_company.replace(' ', '_')}.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                        key="dl_cl_md"
+                    )
+                with col_cl_down2:
+                    try:
+                        pdf_cl_data = convert_markdown_to_pdf(st.session_state["tailored_cover_letter_text"])
+                        st.download_button(
+                            label="📄 Download Cover Letter (.pdf)",
+                            data=pdf_cl_data.getvalue(),
+                            file_name=f"cover_letter_{target_company.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="dl_cl_pdf"
+                        )
+                    except Exception as pe:
+                        st.error(f"⚠️ Failed to generate Cover Letter PDF: {pe}")
+            else:
+                st.info("ℹ️ Cover letter details are not available. Re-run tailoring to generate it.")
