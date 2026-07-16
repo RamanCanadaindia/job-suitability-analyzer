@@ -12,6 +12,24 @@ import auth
 from datetime import datetime
 import gspread
 
+# Programmatically install Playwright Chromium browser on Streamlit Cloud (Linux) startup
+if os.name != "nt":
+    try:
+        import subprocess
+        @st.cache_resource
+        def install_playwright_browsers():
+            try:
+                subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
+                return True
+            except Exception as e:
+                return str(e)
+        
+        status = install_playwright_browsers()
+        if status is not True:
+            st.warning(f"⚠️ Playwright browser auto-installation alert: {status}")
+    except Exception as e:
+        pass
+
 def scrape_linkedin_job(url):
     try:
         headers = {
