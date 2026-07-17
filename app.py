@@ -9,6 +9,7 @@ import urllib.parse
 from utils.gemini_helper import query_gemini, GeminiError
 from utils.pdf_helper import convert_markdown_to_pdf
 from utils.excel_helper import save_to_excel
+from utils.job_extraction import apply_evidence_rules
 import auth
 from datetime import datetime
 import gspread
@@ -955,6 +956,13 @@ with tab_gmail:
                     - Source: {source_board}
                     - Description: {full_desc}
 
+                    FACT EXTRACTION RULES:
+                    - Extract factual job fields ONLY from the Job Listing above, never from the Candidate Profile.
+                    - Do not infer, generalize, or add common accounting requirements.
+                    - Software must be named verbatim in the listing.
+                    - "month-end" does not mean "year-end".
+                    - Return "Not Mentioned" when the listing does not explicitly support a value.
+
                     Analyze suitability. Output STRICTLY in JSON format:
                     {{
                       "suitability_score": 85,
@@ -1006,6 +1014,8 @@ with tab_gmail:
                             "salary": "Not Mentioned",
                             "gaps_roadmap": "None"
                         }
+
+                    eval_data = apply_evidence_rules(full_desc, eval_data)
                         
                     evaluated_rows.append({
                         "Date Found": datetime.now().strftime("%Y-%m-%d"),

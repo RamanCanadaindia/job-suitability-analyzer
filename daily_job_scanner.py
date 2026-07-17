@@ -8,6 +8,7 @@ from email.header import decode_header
 from datetime import datetime
 import time
 from playwright.sync_api import sync_playwright
+from utils.job_extraction import apply_evidence_rules
 from google.oauth2.service_account import Credentials
 import gspread
 import urllib.request
@@ -387,6 +388,13 @@ def run_pipeline():
             - Location: {job_loc}
             - Description: {full_desc}
 
+            FACT EXTRACTION RULES:
+            - Extract factual job fields ONLY from the Job Listing above, never from the Candidate Profile.
+            - Do not infer, generalize, or add common accounting requirements.
+            - Software must be named verbatim in the listing.
+            - "month-end" does not mean "year-end".
+            - Return "Not Mentioned" when the listing does not explicitly support a value.
+
             Analyze suitability. Output STRICTLY in JSON format:
             {{
               "suitability_score": 85,
@@ -440,6 +448,8 @@ def run_pipeline():
                     "salary": "Not Mentioned",
                     "gaps_roadmap": "None"
                 }
+
+            eval_data = apply_evidence_rules(full_desc, eval_data)
                 
             row = [
                 datetime.now().strftime("%Y-%m-%d"),
