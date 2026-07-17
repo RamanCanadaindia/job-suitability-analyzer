@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import re
 import os
+import sys
 import urllib.request
 import urllib.parse
 from utils.gemini_helper import query_gemini, GeminiError
@@ -13,22 +14,38 @@ from datetime import datetime
 import gspread
 
 # Programmatically install Playwright Chromium browser on Streamlit Cloud (Linux) startup
+playwright_browser_status = True
 if os.name != "nt":
     try:
         import subprocess
-        @st.cache_resource
         def install_playwright_browsers():
             try:
-                subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
+                subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    check=True,
+                    timeout=300,
+                )
                 return True
             except Exception as e:
                 return str(e)
         
         status = install_playwright_browsers()
+        playwright_browser_status = status
         if status is not True:
             st.warning(f"⚠️ Playwright browser auto-installation alert: {status}")
     except Exception as e:
-        pass
+        playwright_browser_status = str(e)
+
+
+def launch_chromium(playwright):
+    """Launch visibly on Windows and headlessly on Streamlit Cloud Linux."""
+    if playwright_browser_status is not True:
+        raise RuntimeError(f"Chromium setup failed: {playwright_browser_status}")
+
+    launch_options = {"headless": os.name != "nt"}
+    if os.name != "nt":
+        launch_options["args"] = ["--no-sandbox", "--disable-dev-shm-usage"]
+    return playwright.chromium.launch(**launch_options)
 
 def scrape_linkedin_job(url):
     try:
@@ -73,7 +90,7 @@ def scrape_job_url(url):
                 return desc
                 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = launch_chromium(p)
             context = browser.new_context(
                 viewport={"width": 1280, "height": 800},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -853,8 +870,8 @@ with tab_gmail:
                     full_desc = ""
                     try:
                         with sync_playwright() as p:
-                            # Launch headed (visible Chrome browser)
-                            browser = p.chromium.launch(headless=False)
+                            # Visible on local Windows; headless on Streamlit Cloud.
+                            browser = launch_chromium(p)
                             context = browser.new_context(
                                 viewport={"width": 1280, "height": 800},
                                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
