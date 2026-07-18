@@ -208,29 +208,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Profile Persistence
-profile_path = "user_profile.json"
-def load_profile():
-    if os.path.exists(profile_path):
-        try:
-            with open(profile_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return {"candidate_name": "", "candidate_phone": "", "candidate_email": "", "candidate_linkedin": "", "target_titles": "", "skills": "", "experience": "", "salary": "", "resume": ""}
-
-def save_profile(data):
-    try:
-        with open(profile_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-    except OSError as e:
-        if e.errno == 30:
-            st.info("ℹ️ Running online: profile is kept in memory for this session (files are read-only).")
-        else:
-            st.error(f"Failed to save profile: {e}")
-    except Exception as e:
-        st.error(f"Failed to save profile: {e}")
-
 # Gmail Credentials Persistence
 gmail_config_path = "gmail_config.json"
 def load_gmail_config():
@@ -253,6 +230,122 @@ def save_gmail_config(data):
             st.error(f"Failed to save Gmail credentials: {e}")
     except Exception as e:
         st.error(f"Failed to save Gmail credentials: {e}")
+
+# Profile Persistence
+profile_path = "user_profile.json"
+def load_profile():
+    # 1. Initialize default empty profile
+    profile = {
+        "candidate_name": "",
+        "candidate_phone": "",
+        "candidate_email": "",
+        "candidate_linkedin": "",
+        "target_titles": "",
+        "skills": "",
+        "experience": "",
+        "salary": "",
+        "resume": ""
+    }
+    
+    # 2. Try loading from Secrets (permanent cloud settings)
+    try:
+        # Check flat keys
+        for k in profile.keys():
+            if k in st.secrets:
+                profile[k] = str(st.secrets[k])
+        # Check [profile] block
+        if "profile" in st.secrets:
+            for k in profile.keys():
+                if k in st.secrets["profile"]:
+                    profile[k] = str(st.secrets["profile"][k])
+    except:
+        pass
+        
+    # 3. Try loading from local user_profile.json
+    if os.path.exists(profile_path):
+        try:
+            with open(profile_path, "r", encoding="utf-8") as f:
+                local_data = json.load(f)
+                for k in profile.keys():
+                    if local_data.get(k):
+                        profile[k] = local_data[k]
+        except:
+            pass
+            
+    # 4. Try loading from Google Sheet if credentials & URL exist
+    try:
+        gmail_saved = load_gmail_config()
+        sheet_url = st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", "")))
+        if sheet_url:
+            import sheets_helper
+            client = sheets_helper.get_gspread_client()
+            if client:
+                spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                if spreadsheet:
+                    try:
+                        wks = spreadsheet.worksheet("Candidate_Profile")
+                        records = wks.get_all_records()
+                        if records:
+                            row = records[0] # Load the first row of data
+                            for k in profile.keys():
+                                # Check matching keys case-insensitively or exactly
+                                val = row.get(k) or row.get(k.replace("candidate_", ""))
+                                if val:
+                                    profile[k] = str(val)
+                    except gspread.exceptions.WorksheetNotFound:
+                        pass
+    except Exception as e:
+        pass
+        
+    return profile
+
+def save_profile(data):
+    # 1. Save to local JSON
+    try:
+        with open(profile_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+    except OSError as e:
+        if e.errno == 30:
+            pass # Ephemeral environment
+        else:
+            st.error(f"Failed to save profile locally: {e}")
+    except Exception as e:
+        st.error(f"Failed to save profile locally: {e}")
+
+    # 2. Save/Sync to Google Sheet if configured
+    try:
+        gmail_saved = load_gmail_config()
+        sheet_url = st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", "")))
+        if sheet_url:
+            import sheets_helper
+            client = sheets_helper.get_gspread_client()
+            if client:
+                spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                if spreadsheet:
+                    sheet_name = "Candidate_Profile"
+                    try:
+                        wks = spreadsheet.worksheet(sheet_name)
+                    except gspread.exceptions.WorksheetNotFound:
+                        # Create worksheet
+                        headers = list(data.keys())
+                        wks = spreadsheet.add_worksheet(title=sheet_name, rows="10", cols=str(len(headers)))
+                        wks.append_row(headers)
+                    
+                    # Overwrite/Update the profile row
+                    # Clear existing rows (except headers)
+                    wks.resize(rows=2) # Resize to header + 1 data row
+                    # Set values
+                    headers = wks.row_values(1)
+                    # Align values to headers
+                    row_values = []
+                    for h in headers:
+                        row_values.append(str(data.get(h, "")))
+                    
+                    # Update row 2
+                    wks.update("A2", [row_values])
+                    st.success("✅ Profile also synced and saved permanently in your Google Sheet!")
+    except Exception as e:
+        st.warning(f"⚠️ Could not sync profile to Google Sheet: {e}. Check sheet share settings.")
 
 # Sidebar Configuration
 st.sidebar.header("⚙️ API Configurations")

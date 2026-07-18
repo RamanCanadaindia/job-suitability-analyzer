@@ -1,0 +1,54 @@
+[2026-07-16 19:00:03] Starting Automated Job Suitability Scan...
+Found 5 recent job alert emails to process.
+Error parsing email 2: The read operation timed out
+Error parsing email 3: The read operation timed out
+Error parsing email 4: The read operation timed out
+Error parsing email 5: The read operation timed out
+Extracted 1 total job links. Connecting to Google Sheets...
+Starting Playwright headed scraper and Gemini analysis...
+Scraping: Accounts Payable Administrator at 1095000BC...
+Traceback (most recent call last):
+  File "C:\Users\admin\.gemini\antigravity\scratch\job_suitability_analyzer\daily_job_scanner.py", line 473, in run_pipeline
+    print(f"\u2705 Successfully posted and synced: {job_title} at {company} ({eval_data.get('suitability_score', 50)}% Match)")
+  File "C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\admin\.gemini\antigravity\scratch\job_suitability_analyzer\daily_job_scanner.py", line 482, in <module>
+    run_pipeline()
+  File "C:\Users\admin\.gemini\antigravity\scratch\job_suitability_analyzer\daily_job_scanner.py", line 475, in run_pipeline
+    print(f"\u274c Failed to append row: {sheet_err}")
+  File "C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+[2026-07-17 19:00:03] Starting Automated Job Suitability Scan...
+Found 5 recent job alert emails to process.
+Error parsing email 2: The read operation timed out
+Error parsing email 5: The read operation timed out
+Extracted 3 total job links. Connecting to Google Sheets...
+Starting Playwright headed scraper and Gemini analysis...
+Scraping: Accounts Payable Coordinator at Simon Fraser University...
+Traceback (most recent call last):
+  File "C:\Users\admin\.gemini\antigravity\scratch\job_suitability_analyzer\daily_job_scanner.py", line 483, in run_pipeline
+    print(f"\u2705 Successfully posted and synced: {job_title} at {company} ({eval_data.get('suitability_score', 50)}% Match)")
+  File "C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\admin\.gemini\antigravity\scratch\job_suitability_analyzer\daily_job_scanner.py", line 492, in <module>
+    run_pipeline()
+  File "C:\Users\admin\.gemini\antigravity\scratch\job_suitability_analyzer\daily_job_scanner.py", line 485, in run_pipeline
+    print(f"\u274c Failed to append row: {sheet_err}")
+  File "C:\Users\admin\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>

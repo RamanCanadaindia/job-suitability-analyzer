@@ -39,13 +39,80 @@ def load_gmail_config():
     return {}
 
 def load_profile():
+    # 1. Start with defaults
+    profile = {
+        "candidate_name": "",
+        "candidate_phone": "",
+        "candidate_email": "",
+        "candidate_linkedin": "",
+        "target_titles": "",
+        "skills": "",
+        "experience": "",
+        "salary": "",
+        "resume": ""
+    }
+    
+    # 2. Load from local file user_profile.json
     if os.path.exists(PROFILE_PATH):
         try:
             with open(PROFILE_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+                local_data = json.load(f)
+                for k in profile.keys():
+                    if local_data.get(k):
+                        profile[k] = local_data[k]
         except Exception as e:
             print(f"Error loading user_profile.json: {e}")
-    return {}
+            
+    # 3. Load from Google Sheets if we can (to allow syncing when running online/headless)
+    try:
+        gmail_cfg = load_gmail_config()
+        sheet_url = gmail_cfg.get("sheet_url")
+        
+        # Get credentials
+        secrets = load_secrets()
+        gcp_json_str = secrets.get("gcp_service_account_json")
+        gcp_acc = secrets.get("gcp_service_account")
+        
+        credentials_dict = None
+        if gcp_json_str:
+            credentials_dict = json.loads(gcp_json_str, strict=False)
+        elif gcp_acc:
+            credentials_dict = dict(gcp_acc)
+            
+        if credentials_dict and sheet_url:
+            if "private_key" in credentials_dict:
+                credentials_dict["private_key"] = credentials_dict["private_key"].replace("\\n", "\n")
+            
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
+            creds = Credentials.from_service_account_info(credentials_dict, scopes=scopes)
+            client = gspread.authorize(creds)
+            
+            # Resolve sheet ID if URL
+            spreadsheet_id = sheet_url
+            if "docs.google.com/spreadsheets" in str(sheet_url):
+                parts = str(sheet_url).split("/d/")
+                if len(parts) > 1:
+                    spreadsheet_id = parts[1].split("/")[0]
+                    
+            spreadsheet = client.open_by_key(spreadsheet_id)
+            try:
+                wks = spreadsheet.worksheet("Candidate_Profile")
+                records = wks.get_all_records()
+                if records:
+                    row = records[0]
+                    for k in profile.keys():
+                        val = row.get(k) or row.get(k.replace("candidate_", ""))
+                        if val:
+                            profile[k] = str(val)
+            except gspread.exceptions.WorksheetNotFound:
+                pass
+    except Exception as e:
+        print(f"Daily scanner failed to load profile from Google Sheets: {e}")
+        
+    return profile
 
 def query_gemini(prompt, api_key, response_json=False):
     models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash-latest", "gemini-1.5-flash"]
