@@ -1652,7 +1652,7 @@ with tab_tailor:
                             with col_t_btn1:
                                 fetch_btn = st.button("🌐 Fetch Job Details from Link", key="tailor_fetch_link", use_container_width=True, disabled=not (apply_link and apply_link != "N/A"))
                             with col_t_btn2:
-                                load_fields_btn = st.button("📋 Load Details from Sheet Row", key="tailor_load_fields", use_container_width=True)
+                                fetch_desc_btn = st.button("📋 Fetch Job Description Details", key="tailor_fetch_desc", use_container_width=True)
                                 
                             if fetch_btn and apply_link and apply_link != "N/A":
                                 with st.spinner("Fetching job details..."):
@@ -1662,17 +1662,48 @@ with tab_tailor:
                                         st.success("🎉 Successfully fetched job description!")
                                         st.rerun()
                                     else:
-                                        st.error("❌ Failed to scrape the URL automatically. Please use 'Load Details from Sheet Row' or paste manually.")
+                                        st.error("❌ Failed to scrape the URL automatically. Please use 'Fetch Job Description Details' or paste manually.")
                                         
-                            if load_fields_btn:
-                                details_list = []
-                                for k, v in selected_record.items():
-                                    if v and str(v).strip() and str(v).lower() != "not mentioned" and str(v).lower() != "n/a" and k not in ["Apply Link", "Score", "Recommendation", "Date Found", "Source", "Gaps / Roadmap"]:
-                                        details_list.append(f"- {k}: {v}")
-                                compiled_desc = f"Job Title: {target_job_title}\nCompany: {target_company}\n\nJob Details from Google Sheet:\n" + "\n".join(details_list)
-                                st.session_state["tailor_job_desc"] = compiled_desc
-                                st.success("🎉 Loaded structured job details from Google Sheet row!")
-                                st.rerun()
+                            if fetch_desc_btn:
+                                sheet_desc = ""
+                                for possible_key in ["Job Description", "Description", "Job Description Details", "Details", "job_description", "description"]:
+                                    if possible_key in selected_record and str(selected_record[possible_key]).strip():
+                                        sheet_desc = str(selected_record[possible_key]).strip()
+                                        break
+                                
+                                if sheet_desc:
+                                    st.session_state["tailor_job_desc"] = sheet_desc
+                                    st.success("🎉 Loaded job description directly from Google Sheet!")
+                                    st.rerun()
+                                else:
+                                    # Fallback: search organic web results using SerpAPI to retrieve description
+                                    with st.spinner("🔍 Searching web for job description details..."):
+                                        try:
+                                            query = f"{target_job_title} at {target_company} {selected_record.get('Location', '')} job description"
+                                            import requests
+                                            serp_key = st.secrets.get("serpapi_key", "")
+                                            if serp_key:
+                                                url = f"https://serpapi.com/search.json?q={requests.utils.quote(query)}&api_key={serp_key}"
+                                                res = requests.get(url, timeout=10).json()
+                                                results = res.get("organic_results", [])
+                                                if results:
+                                                    top_url = results[0].get("link")
+                                                    fetched = scrape_job_url(top_url)
+                                                    if fetched:
+                                                        st.session_state["tailor_job_desc"] = fetched
+                                                        st.success(f"🎉 Successfully fetched job description from web search!")
+                                                        st.rerun()
+                                            # If web search fails/not configured, compile from available fields
+                                            details_list = []
+                                            for k, v in selected_record.items():
+                                                if v and str(v).strip() and str(v).lower() != "not mentioned" and str(v).lower() != "n/a" and k not in ["Apply Link", "Score", "Recommendation", "Date Found", "Source", "Gaps / Roadmap"]:
+                                                    details_list.append(f"- {k}: {v}")
+                                            compiled_desc = f"Job Title: {target_job_title}\nCompany: {target_company}\n\nJob Details:\n" + "\n".join(details_list)
+                                            st.session_state["tailor_job_desc"] = compiled_desc
+                                            st.info("ℹ️ Loaded structured fields from Google Sheet row.")
+                                            st.rerun()
+                                        except Exception as search_err:
+                                            st.error(f"❌ Failed to fetch: {search_err}")
                             
                             target_job_desc = st.text_area("Job Description Details", value=st.session_state.get("tailor_job_desc", ""), height=150, key="tailor_sheet_desc")
             except Exception as e:
