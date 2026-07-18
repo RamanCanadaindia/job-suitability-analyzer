@@ -287,16 +287,21 @@ def load_profile():
                         records = wks.get_all_records()
                         if records:
                             row = records[0] # Load the first row of data
+                            missing_fields = [field for field in profile if field not in row]
+                            if missing_fields:
+                                raise RuntimeError(
+                                    "Candidate_Profile is missing columns: "
+                                    + ", ".join(missing_fields)
+                                )
                             for k in profile.keys():
-                                # Check matching keys case-insensitively or exactly
-                                val = row.get(k) or row.get(k.replace("candidate_", ""))
-                                if val:
-                                    profile[k] = str(val)
+                                # The sheet is authoritative, including blank cells.
+                                profile[k] = str(row.get(k, ""))
+                            return profile
                     except gspread.exceptions.WorksheetNotFound:
                         pass
     except Exception as e:
         st.warning(f"⚠️ Could not load profile from Google Sheets: {e}. Falling back to local configuration/secrets.")
-        
+
     return profile
 
 def save_profile(data):
@@ -366,6 +371,77 @@ def get_profile_sheet_url():
         or gmail_saved.get("sheet_url")
         or secret_sheet
     )
+
+
+def load_profile_from_google_sheet():
+    """Fetch the canonical profile directly from Candidate_Profile row 2."""
+    sheet_url = get_profile_sheet_url()
+    if not sheet_url:
+        raise RuntimeError("Google Spreadsheet URL/ID is not configured.")
+
+    import sheets_helper
+
+    client = sheets_helper.get_gspread_client()
+    if not client:
+        raise RuntimeError("Google Sheets authentication failed.")
+    spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+    if not spreadsheet:
+        raise RuntimeError("The configured Google Spreadsheet could not be opened.")
+
+    try:
+        worksheet = spreadsheet.worksheet("Candidate_Profile")
+    except gspread.exceptions.WorksheetNotFound as exc:
+        raise RuntimeError("Candidate_Profile worksheet was not found.") from exc
+
+    values = worksheet.get_all_values()
+    if len(values) < 2:
+        raise RuntimeError("Candidate_Profile does not contain a profile in row 2.")
+
+    headers = [str(value).strip() for value in values[0]]
+    row = values[1]
+    sheet_profile = {}
+    for field in PROFILE_FIELDS:
+        if field not in headers:
+            raise RuntimeError(f"Candidate_Profile is missing the '{field}' column.")
+        column_index = headers.index(field)
+        sheet_profile[field] = row[column_index] if column_index < len(row) else ""
+    return sheet_profile
+
+
+def sync_profile_widgets_from_google_sheet():
+    """Refresh every Candidate Profile widget from the canonical sheet row."""
+    try:
+        profile = load_profile_from_google_sheet()
+        widget_fields = {
+            "prof_name": "candidate_name",
+            "prof_phone": "candidate_phone",
+            "prof_email": "candidate_email",
+            "prof_linkedin": "candidate_linkedin",
+            "prof_titles": "target_titles",
+            "prof_experience": "experience",
+            "prof_skills": "skills",
+            "prof_salary": "salary",
+            "prof_resume": "resume",
+        }
+        for widget_key, field in widget_fields.items():
+            st.session_state[widget_key] = profile[field]
+        st.session_state["profile_sync_success"] = True
+        st.session_state.pop("profile_sync_error", None)
+    except Exception as exc:
+        st.session_state["profile_sync_error"] = str(exc)
+        st.session_state.pop("profile_sync_success", None)
+
+
+def sync_tailor_resume_from_google_sheet():
+    """Refresh the ATS Tailor base-resume widget from the sheet."""
+    try:
+        profile = load_profile_from_google_sheet()
+        st.session_state["tailor_base_resume"] = profile["resume"]
+        st.session_state["tailor_sync_success"] = True
+        st.session_state.pop("tailor_sync_error", None)
+    except Exception as exc:
+        st.session_state["tailor_sync_error"] = str(exc)
+        st.session_state.pop("tailor_sync_success", None)
 
 
 def save_profile(data):
@@ -511,7 +587,17 @@ with tab_profile:
     with col_b1:
         save_btn = st.button("💾 Save Profile Permanently", use_container_width=True)
     with col_b2:
-        reload_btn = st.button("🔄 Sync/Reload from Google Sheet", use_container_width=True)
+        st.button(
+            "🔄 Sync/Reload from Google Sheet",
+            use_container_width=True,
+            on_click=sync_profile_widgets_from_google_sheet,
+        )
+
+    if st.session_state.pop("profile_sync_success", False):
+        st.success("🎉 Profile successfully reloaded from Google Sheets!")
+    profile_sync_error = st.session_state.pop("profile_sync_error", None)
+    if profile_sync_error:
+        st.error(f"❌ Profile reload failed: {profile_sync_error}")
         
     if save_btn:
         profile_data = {
@@ -527,14 +613,6 @@ with tab_profile:
         }
         if save_profile(profile_data):
             st.success("🎉 Profile saved permanently in Google Sheets!")
-            st.rerun()
-
-    if reload_btn:
-        with st.spinner("🔄 Syncing latest profile from Google Sheet..."):
-            for key in ["prof_name", "prof_phone", "prof_email", "prof_linkedin", "prof_titles", "prof_experience", "prof_skills", "prof_salary", "prof_resume"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.success("🎉 Profile successfully reloaded and synchronized!")
             st.rerun()
 
 with tab_search:
@@ -1750,13 +1828,17 @@ with tab_tailor:
     st.markdown("### 2. Base Resume / Qualifications")
     editable_resume = st.text_area("Your Base Resume (Loaded from profile)", value=base_resume_text, height=200, key="tailor_base_resume")
     
-    tailor_reload_btn = st.button("🔄 Sync/Reload from Google Sheet", key="tailor_reload_profile_btn", use_container_width=True)
-    if tailor_reload_btn:
-        with st.spinner("🔄 Syncing latest profile from Google Sheet..."):
-            if "tailor_base_resume" in st.session_state:
-                del st.session_state["tailor_base_resume"]
-            st.success("🎉 Base resume successfully reloaded from Google Sheet!")
-            st.rerun()
+    st.button(
+        "🔄 Sync/Reload from Google Sheet",
+        key="tailor_reload_profile_btn",
+        use_container_width=True,
+        on_click=sync_tailor_resume_from_google_sheet,
+    )
+    if st.session_state.pop("tailor_sync_success", False):
+        st.success("🎉 Base resume successfully reloaded from Google Sheets!")
+    tailor_sync_error = st.session_state.pop("tailor_sync_error", None)
+    if tailor_sync_error:
+        st.error(f"❌ Base resume reload failed: {tailor_sync_error}")
     
     st.markdown("### 3. Generate Tailored Resume")
     tailor_btn = st.button("✨ Tailor my Resume for this Job", type="primary", use_container_width=True)
