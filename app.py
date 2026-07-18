@@ -1662,7 +1662,6 @@ with tab_tailor:
     
     st.markdown("### 3. Generate Tailored Resume")
     tailor_btn = st.button("✨ Tailor my Resume for this Job", type="primary", use_container_width=True)
-    
     if tailor_btn:
         if not target_job_desc.strip():
             st.error("❗ Please select or paste the target job description details first!")
@@ -1691,13 +1690,20 @@ with tab_tailor:
                 - Content: {target_job_desc}
                 
                 Instructions:
-                1. Always format the top header of the resume using the candidate's actual Contact Details provided above. Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
-                2. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize QuickBooks, T1/T2 tax, bookkeeping, payroll, etc. based on the Candidate Profile). Do NOT include software or skills (such as CaseWare) that are not present in the candidate's profile or base resume.
-                3. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles. Do NOT use generic placeholders like '[Your Previous Job Title]', '[Your Company Name]', '[City, Province]', '[Start Date]', or '[End Date]'. Always use the exact companies, titles, locations, and dates from the candidate's Base Resume provided above.
-                4. Optimize bullet points using the action-verb + task + result (STAR) format, matching keywords from the job description.
-                5. Format the output in clean, professional Markdown.
-                
-                Only return the tailored resume. Do not include introductory or concluding remarks.
+                1. Header & Capitalization: Always use the name 'Raman Deep Kumar' (with proper capitalization) and format the top header of the resume using the candidate's actual Contact Details provided above. Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
+                2. Professional Experience Structure: Format the work history as a proper 'Professional Experience' section (do NOT use generic titles like 'Professional Experience Highlights').
+                3. Verified Employer Facts: For the current role at Raman Tax & Accounting Inc., you must ALWAYS include the exact employer name, location, job title, and dates:
+                   - Title: FULL-CYCLE BOOKKEEPER
+                   - Company: Raman Tax & Accounting Inc.
+                   - Location: Surrey, BC
+                   - Dates: 2020–Present
+                   Explain that the candidate handled multiple client companies through Raman Tax & Accounting Inc. Do NOT present those clients as separate employers.
+                4. Experience & Bullet Tailoring: Tailor and reorder the bullet points to align with the target job description (e.g. highlighting QuickBooks, tax returns, bank reconciliations, payroll, or GST/HST/PST where relevant). Do NOT alter the verified facts or invent achievements, metrics, numbers, software, or experience not present in the base resume. Only include software or skills that are explicitly present in the candidate's profile or base resume (never hallucinate software like CaseWare).
+                5. ATS-Safe Layout:
+                   - Do NOT include any visible horizontal rule separators (such as '---').
+                   - Use standard bullets (like '-') and clear spacing.
+                   - Ensure the layout is clean, compact, and fits education onto the same page when possible to avoid producing a nearly empty second page.
+                6. Only return the tailored resume. Do not include introductory or concluding remarks.
                 """
                 try:
                     tailored_res = query_gemini(prompt, response_json=False)
