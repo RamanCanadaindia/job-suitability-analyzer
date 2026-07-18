@@ -1693,7 +1693,7 @@ with tab_tailor:
                 Instructions:
                 1. Always format the top header of the resume using the candidate's actual Contact Details provided above. Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
                 2. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize CaseWare, T1/T2, payroll, etc.).
-                3. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles.
+                3. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles. Do NOT use generic placeholders like '[Your Previous Job Title]', '[Your Company Name]', '[City, Province]', '[Start Date]', or '[End Date]'. Always use the exact companies, titles, locations, and dates from the candidate's Base Resume provided above.
                 4. Optimize bullet points using the action-verb + task + result (STAR) format, matching keywords from the job description.
                 5. Format the output in clean, professional Markdown.
                 
