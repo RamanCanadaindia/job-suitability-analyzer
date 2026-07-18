@@ -1647,15 +1647,32 @@ with tab_tailor:
                                     
                             if apply_link and apply_link != "N/A":
                                 st.write(f"🔗 Job Apply Link: {apply_link}")
-                                fetch_btn = st.button("🌐 Fetch Job Details from Link", key="tailor_fetch_link")
-                                if fetch_btn:
-                                    with st.spinner("Fetching job details..."):
-                                        fetched = scrape_job_url(apply_link)
-                                        if fetched:
-                                            st.session_state["tailor_job_desc"] = fetched
-                                            st.success("🎉 Successfully fetched job description!")
-                                        else:
-                                            st.error("❌ Failed to scrape the URL automatically. Please copy-paste the job text below.")
+                                
+                            col_t_btn1, col_t_btn2 = st.columns(2)
+                            with col_t_btn1:
+                                fetch_btn = st.button("🌐 Fetch Job Details from Link", key="tailor_fetch_link", use_container_width=True, disabled=not (apply_link and apply_link != "N/A"))
+                            with col_t_btn2:
+                                load_fields_btn = st.button("📋 Load Details from Sheet Row", key="tailor_load_fields", use_container_width=True)
+                                
+                            if fetch_btn and apply_link and apply_link != "N/A":
+                                with st.spinner("Fetching job details..."):
+                                    fetched = scrape_job_url(apply_link)
+                                    if fetched:
+                                        st.session_state["tailor_job_desc"] = fetched
+                                        st.success("🎉 Successfully fetched job description!")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Failed to scrape the URL automatically. Please use 'Load Details from Sheet Row' or paste manually.")
+                                        
+                            if load_fields_btn:
+                                details_list = []
+                                for k, v in selected_record.items():
+                                    if v and str(v).strip() and str(v).lower() != "not mentioned" and str(v).lower() != "n/a" and k not in ["Apply Link", "Score", "Recommendation", "Date Found", "Source", "Gaps / Roadmap"]:
+                                        details_list.append(f"- {k}: {v}")
+                                compiled_desc = f"Job Title: {target_job_title}\nCompany: {target_company}\n\nJob Details from Google Sheet:\n" + "\n".join(details_list)
+                                st.session_state["tailor_job_desc"] = compiled_desc
+                                st.success("🎉 Loaded structured job details from Google Sheet row!")
+                                st.rerun()
                             
                             target_job_desc = st.text_area("Job Description Details", value=st.session_state.get("tailor_job_desc", ""), height=150, key="tailor_sheet_desc")
             except Exception as e:
