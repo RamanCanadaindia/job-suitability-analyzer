@@ -789,10 +789,10 @@ with tab_gmail:
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", default_secret_email)), placeholder="yourname@gmail.com")
-        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", default_secret_email_pass)), help="Create an App Password in your Google Account Security settings.")
+        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER") or gmail_saved.get("gmail_user") or default_secret_email, placeholder="yourname@gmail.com")
+        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD") or gmail_saved.get("gmail_password") or default_secret_email_pass, help="Create an App Password in your Google Account Security settings.")
     with col_g2:
-        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", default_secret_sheet or st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
+        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id") or gmail_saved.get("sheet_url") or default_secret_sheet or st.secrets.get("google_spreadsheet_id", ""), placeholder="Paste sheet link here")
         scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=5)
 
     if gmail_user:
