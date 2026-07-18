@@ -1747,6 +1747,14 @@ with tab_tailor:
     st.markdown("### 2. Base Resume / Qualifications")
     editable_resume = st.text_area("Your Base Resume (Loaded from profile)", value=base_resume_text, height=200, key="tailor_base_resume")
     
+    tailor_reload_btn = st.button("🔄 Sync/Reload from Google Sheet", key="tailor_reload_profile_btn", use_container_width=True)
+    if tailor_reload_btn:
+        with st.spinner("🔄 Syncing latest profile from Google Sheet..."):
+            if "tailor_base_resume" in st.session_state:
+                del st.session_state["tailor_base_resume"]
+            st.success("🎉 Base resume successfully reloaded from Google Sheet!")
+            st.rerun()
+    
     st.markdown("### 3. Generate Tailored Resume")
     tailor_btn = st.button("✨ Tailor my Resume for this Job", type="primary", use_container_width=True)
     if tailor_btn:
