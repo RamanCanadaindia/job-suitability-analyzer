@@ -1692,7 +1692,7 @@ with tab_tailor:
                 
                 Instructions:
                 1. Always format the top header of the resume using the candidate's actual Contact Details provided above. Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
-                2. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize CaseWare, T1/T2, payroll, etc.).
+                2. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize QuickBooks, T1/T2 tax, bookkeeping, payroll, etc. based on the Candidate Profile). Do NOT include software or skills (such as CaseWare) that are not present in the candidate's profile or base resume.
                 3. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles. Do NOT use generic placeholders like '[Your Previous Job Title]', '[Your Company Name]', '[City, Province]', '[Start Date]', or '[End Date]'. Always use the exact companies, titles, locations, and dates from the candidate's Base Resume provided above.
                 4. Optimize bullet points using the action-verb + task + result (STAR) format, matching keywords from the job description.
                 5. Format the output in clean, professional Markdown.
@@ -1728,7 +1728,7 @@ with tab_tailor:
                     Instructions:
                     1. Format the cover letter professionally with standard contact info blocks. Use Today's Date: {datetime.now().strftime("%B %d, %Y")} directly at the very top. Do NOT write placeholders like '[Current Date]'.
                     2. Use the provided contact details at the top header and in the closing sign-off block.
-                    3. Explicitly tie the candidate's matching accomplishments (e.g. QuickBooks, T1/T2 tax preparation, bookkeeping, CaseWare) to the specific challenges/requirements of the job description.
+                    3. Explicitly tie the candidate's matching accomplishments (e.g. QuickBooks, T1/T2 tax preparation, bookkeeping) to the specific challenges/requirements of the job description. Do NOT mention any software or skills (such as CaseWare) that are not present in the candidate's resume/profile.
                     4. Address key requirements and qualifications from the listing. Make it engaging, professional, and convincing.
                     5. Keep it under one page (around 250-350 words).
                     
