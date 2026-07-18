@@ -1718,21 +1718,31 @@ with tab_tailor:
         target_job_desc = st.text_area("Paste Job Description details here", height=150, key="tailor_manual_desc")
         
     if target_job_desc and target_job_desc.strip():
-        import utils.job_extraction as job_extraction
-        extracted_info = job_extraction.apply_evidence_rules(target_job_desc, {})
-        with st.expander("🔍 Extracted Job Requirements (ATS Focus)", expanded=True):
-            st.markdown("Here is the key matching information extracted from the job description:")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**💼 Experience:** {extracted_info.get('experience_required', 'Not Mentioned')}")
-                st.markdown(f"**🎓 Education:** {extracted_info.get('education', 'Not Mentioned')}")
-                st.markdown(f"**📜 CPA Requirement:** {extracted_info.get('cpa_requirement', 'Not Mentioned')}")
-                st.markdown(f"**🖥️ Software Required:** {extracted_info.get('software', 'Not Mentioned')}")
-            with col2:
-                st.markdown(f"**📊 Work Mode:** {extracted_info.get('work_mode', 'Not Mentioned')} ({extracted_info.get('employment_type', 'Not Mentioned')})")
-                st.markdown(f"**💵 Salary:** {extracted_info.get('salary', 'Not Mentioned')}")
-                st.markdown(f"**📝 Tax Experience:** {extracted_info.get('tax_experience', 'Not Mentioned')}")
-                st.markdown(f"**🤝 Client Interaction:** {extracted_info.get('client_interaction', 'No')}")
+        # Reset trigger if job description changes
+        if target_job_desc != st.session_state.get("tailor_prev_desc", ""):
+            st.session_state["tailor_extracted_triggered"] = False
+            st.session_state["tailor_prev_desc"] = target_job_desc
+            
+        extract_btn = st.button("🔍 Extract Job Requirements (ATS Focus)", use_container_width=True, key="tailor_extract_ats_btn")
+        if extract_btn:
+            st.session_state["tailor_extracted_triggered"] = True
+            
+        if st.session_state.get("tailor_extracted_triggered", False):
+            import utils.job_extraction as job_extraction
+            extracted_info = job_extraction.apply_evidence_rules(target_job_desc, {})
+            with st.expander("🔍 Extracted Job Requirements (ATS Focus)", expanded=True):
+                st.markdown("Here is the key matching information extracted from the job description:")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**💼 Experience:** {extracted_info.get('experience_required', 'Not Mentioned')}")
+                    st.markdown(f"**🎓 Education:** {extracted_info.get('education', 'Not Mentioned')}")
+                    st.markdown(f"**📜 CPA Requirement:** {extracted_info.get('cpa_requirement', 'Not Mentioned')}")
+                    st.markdown(f"**🖥️ Software Required:** {extracted_info.get('software', 'Not Mentioned')}")
+                with col2:
+                    st.markdown(f"**📊 Work Mode:** {extracted_info.get('work_mode', 'Not Mentioned')} ({extracted_info.get('employment_type', 'Not Mentioned')})")
+                    st.markdown(f"**💵 Salary:** {extracted_info.get('salary', 'Not Mentioned')}")
+                    st.markdown(f"**📝 Tax Experience:** {extracted_info.get('tax_experience', 'Not Mentioned')}")
+                    st.markdown(f"**🤝 Client Interaction:** {extracted_info.get('client_interaction', 'No')}")
 
     st.markdown("### 2. Base Resume / Qualifications")
     editable_resume = st.text_area("Your Base Resume (Loaded from profile)", value=base_resume_text, height=200, key="tailor_base_resume")
