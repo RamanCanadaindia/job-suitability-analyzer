@@ -1891,13 +1891,14 @@ with tab_tailor:
         tab_res_out, tab_cl_out = st.tabs(["📝 Tailored Resume", "✉️ Tailored Cover Letter"])
         
         with tab_res_out:
+            clean_title = "".join(c for c in target_job_title.replace("/", "_").replace("\\", "_").replace(" ", "_") if c.isalnum() or c in ["_", "-"])
             st.markdown(st.session_state["tailored_resume_text"])
             col_res_down1, col_res_down2 = st.columns(2)
             with col_res_down1:
                 st.download_button(
                     label="💾 Download Tailored Resume (.md)",
                     data=st.session_state["tailored_resume_text"],
-                    file_name=f"tailored_resume_{target_company.replace(' ', '_')}.md",
+                    file_name=f"Raman_{clean_title}_Resume.md",
                     mime="text/markdown",
                     use_container_width=True,
                     key="dl_res_md"
@@ -1908,7 +1909,7 @@ with tab_tailor:
                     st.download_button(
                         label="📄 Download Tailored Resume (.pdf)",
                         data=pdf_res_data.getvalue(),
-                        file_name=f"tailored_resume_{target_company.replace(' ', '_')}.pdf",
+                        file_name=f"Raman_{clean_title}_Resume.pdf",
                         mime="application/pdf",
                         use_container_width=True,
                         key="dl_res_pdf"
@@ -1924,7 +1925,7 @@ with tab_tailor:
                     st.download_button(
                         label="💾 Download Cover Letter (.md)",
                         data=st.session_state["tailored_cover_letter_text"],
-                        file_name=f"cover_letter_{target_company.replace(' ', '_')}.md",
+                        file_name=f"Raman_{clean_title}_Cover_Letter.md",
                         mime="text/markdown",
                         use_container_width=True,
                         key="dl_cl_md"
@@ -1935,7 +1936,7 @@ with tab_tailor:
                         st.download_button(
                             label="📄 Download Cover Letter (.pdf)",
                             data=pdf_cl_data.getvalue(),
-                            file_name=f"cover_letter_{target_company.replace(' ', '_')}.pdf",
+                            file_name=f"Raman_{clean_title}_Cover_Letter.pdf",
                             mime="application/pdf",
                             use_container_width=True,
                             key="dl_cl_pdf"
