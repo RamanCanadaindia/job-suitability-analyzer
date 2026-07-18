@@ -20,7 +20,7 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
     
     styles = getSampleStyleSheet()
     
-    # Custom elegant styles matching user requests
+    # Custom elegant styles matching user requests (compact formatting)
     title_style = ParagraphStyle(
         'ResumeTitle',
         parent=styles['Heading1'],
@@ -28,7 +28,7 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#1F3864'),  # Navy #1F3864
-        spaceAfter=4,
+        spaceAfter=3,
         alignment=1  # Centered
     )
     
@@ -36,10 +36,10 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeContact',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        leading=14,
+        fontSize=9.5,
+        leading=13,
         textColor=colors.HexColor('#595959'),  # Medium Gray #595959
-        spaceAfter=15,
+        spaceAfter=10,
         alignment=1  # Centered
     )
     
@@ -47,11 +47,11 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeSection',
         parent=styles['Heading2'],
         fontName='Helvetica-Bold',
-        fontSize=12,
-        leading=16,
+        fontSize=11.5,
+        leading=15,
         textColor=colors.HexColor('#1F3864'),  # Navy #1F3864
-        spaceBefore=14,
-        spaceAfter=4,
+        spaceBefore=10,
+        spaceAfter=2,
         keepWithNext=True
     )
     
@@ -59,35 +59,35 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeBody',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        leading=13.5,
+        fontSize=9.5,
+        leading=12.5,
         textColor=colors.HexColor('#333333'),  # Dark Gray #333333
-        spaceAfter=4
+        spaceAfter=2
     )
     
     bullet_style = ParagraphStyle(
         'ResumeBullet',
         parent=body_style,
-        fontSize=10,
-        leading=13.5,
+        fontSize=9.5,
+        leading=12.5,
         leftIndent=15,
         firstLineIndent=-10,
-        spaceAfter=3
+        spaceAfter=1
     )
     
     job_left_style = ParagraphStyle(
         'JobLeft',
         fontName='Helvetica-Bold',
-        fontSize=10.5,
-        leading=14,
+        fontSize=10,
+        leading=13,
         textColor=colors.HexColor('#333333')
     )
     
     job_right_style = ParagraphStyle(
         'JobRight',
         fontName='Helvetica-Bold',
-        fontSize=10,
-        leading=14,
+        fontSize=9.5,
+        leading=13,
         textColor=colors.HexColor('#595959'),
         alignment=2  # Right-aligned
     )
@@ -130,7 +130,7 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
             d = Drawing(504, 2)
             d.add(Line(0, 1, 504, 1, strokeColor=colors.HexColor('#1F3864'), strokeWidth=1))
             story.append(d)
-            story.append(Spacer(1, 4))
+            # Removed spacer after line rule to keep it compact
             continue
             
         # 4. Job Title / Experience Header lines
@@ -153,8 +153,8 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
                 ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-                ('TOPPADDING', (0,0), (-1,-1), 4),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
             ]))
             story.append(t)
             continue
