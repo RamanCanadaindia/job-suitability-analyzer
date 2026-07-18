@@ -507,7 +507,13 @@ with tab_profile:
         
     resume = st.text_area("Paste Resume Text / Qualifications summary", value=saved_profile.get("resume", ""), height=250, placeholder="Paste your full resume text here...")
     
-    if st.button("💾 Save Profile Permanently"):
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        save_btn = st.button("💾 Save Profile Permanently", use_container_width=True)
+    with col_b2:
+        reload_btn = st.button("🔄 Sync/Reload from Google Sheet", use_container_width=True)
+        
+    if save_btn:
         profile_data = {
             "candidate_name": c_name,
             "candidate_phone": c_phone,
@@ -520,7 +526,13 @@ with tab_profile:
             "resume": resume
         }
         if save_profile(profile_data):
-            st.success("Profile saved permanently in Google Sheets!")
+            st.success("🎉 Profile saved permanently in Google Sheets!")
+            st.rerun()
+
+    if reload_btn:
+        with st.spinner("🔄 Syncing latest profile from Google Sheet..."):
+            st.success("🎉 Profile successfully reloaded and synchronized!")
+            st.rerun()
 
 with tab_search:
     st.subheader("Search Real-time Listings")
