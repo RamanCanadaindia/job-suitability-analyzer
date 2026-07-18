@@ -490,22 +490,22 @@ with tab_profile:
     st.markdown("#### 📞 Contact Information")
     col_c1, col_c2 = st.columns(2)
     with col_c1:
-        c_name = st.text_input("Full Name", value=saved_profile.get("candidate_name", ""), placeholder="e.g. Raman Deep Kumar")
-        c_phone = st.text_input("Phone Number", value=saved_profile.get("candidate_phone", ""), placeholder="e.g. 604-440-9885")
+        c_name = st.text_input("Full Name", value=saved_profile.get("candidate_name", ""), placeholder="e.g. Raman Deep Kumar", key="prof_name")
+        c_phone = st.text_input("Phone Number", value=saved_profile.get("candidate_phone", ""), placeholder="e.g. 604-440-9885", key="prof_phone")
     with col_c2:
-        c_email = st.text_input("Email Address", value=saved_profile.get("candidate_email", ""), placeholder="e.g. email@domain.com")
-        c_linkedin = st.text_input("LinkedIn Profile URL", value=saved_profile.get("candidate_linkedin", ""), placeholder="e.g. https://www.linkedin.com/in/username")
+        c_email = st.text_input("Email Address", value=saved_profile.get("candidate_email", ""), placeholder="e.g. email@domain.com", key="prof_email")
+        c_linkedin = st.text_input("LinkedIn Profile URL", value=saved_profile.get("candidate_linkedin", ""), placeholder="e.g. https://www.linkedin.com/in/username", key="prof_linkedin")
         
     st.markdown("#### 🎯 Target Role & Skills")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        titles = st.text_input("Target Job Titles (comma separated)", value=saved_profile.get("target_titles", ""), placeholder="e.g., Accountant, Bookkeeper")
-        experience = st.text_input("Years of Experience", value=saved_profile.get("experience", ""), placeholder="e.g., 5 years")
+        titles = st.text_input("Target Job Titles (comma separated)", value=saved_profile.get("target_titles", ""), placeholder="e.g., Accountant, Bookkeeper", key="prof_titles")
+        experience = st.text_input("Years of Experience", value=saved_profile.get("experience", ""), placeholder="e.g., 5 years", key="prof_experience")
     with col_t2:
-        skills = st.text_input("Core Technical/Soft Skills (comma separated)", value=saved_profile.get("skills", ""), placeholder="e.g., T1/T2 Tax, QuickBooks, CaseWare")
-        salary = st.text_input("Target Salary (optional)", value=saved_profile.get("salary", ""), placeholder="e.g., $65,000 CAD")
+        skills = st.text_input("Core Technical/Soft Skills (comma separated)", value=saved_profile.get("skills", ""), placeholder="e.g., T1/T2 Tax, QuickBooks, CaseWare", key="prof_skills")
+        salary = st.text_input("Target Salary (optional)", value=saved_profile.get("salary", ""), placeholder="e.g., $65,000 CAD", key="prof_salary")
         
-    resume = st.text_area("Paste Resume Text / Qualifications summary", value=saved_profile.get("resume", ""), height=250, placeholder="Paste your full resume text here...")
+    resume = st.text_area("Paste Resume Text / Qualifications summary", value=saved_profile.get("resume", ""), height=250, placeholder="Paste your full resume text here...", key="prof_resume")
     
     col_b1, col_b2 = st.columns(2)
     with col_b1:
@@ -531,6 +531,9 @@ with tab_profile:
 
     if reload_btn:
         with st.spinner("🔄 Syncing latest profile from Google Sheet..."):
+            for key in ["prof_name", "prof_phone", "prof_email", "prof_linkedin", "prof_titles", "prof_experience", "prof_skills", "prof_salary", "prof_resume"]:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.success("🎉 Profile successfully reloaded and synchronized!")
             st.rerun()
 
