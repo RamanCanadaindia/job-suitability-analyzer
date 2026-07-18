@@ -1676,6 +1676,12 @@ with tab_tailor:
                 You are a professional resume writer and ATS optimization expert.
                 Your task is to tailor the candidate's resume to match the target job description.
                 
+                Candidate Contact Details:
+                - Name: {cand_profile.get('candidate_name', 'Raman Deep Kumar')}
+                - Phone: {cand_profile.get('candidate_phone', '604-440-9885')}
+                - Email: {cand_profile.get('candidate_email', 'beedhtaxservices@outlook.com')}
+                - LinkedIn: {cand_profile.get('candidate_linkedin', 'https://www.linkedin.com/feed/')}
+                
                 Candidate Profile & Base Resume:
                 {editable_resume}
                 
@@ -1685,10 +1691,11 @@ with tab_tailor:
                 - Content: {target_job_desc}
                 
                 Instructions:
-                1. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize CaseWare, T1/T2, payroll, etc.).
-                2. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles.
-                3. Optimize bullet points using the action-verb + task + result (STAR) format, matching keywords from the job description.
-                4. Format the output in clean, professional Markdown.
+                1. Always format the top header of the resume using the candidate's actual Contact Details provided above. Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
+                2. Align experience descriptions to highlight matching skills required by the job (e.g. emphasize CaseWare, T1/T2, payroll, etc.).
+                3. Keep all facts, employers, education, and dates identical to the original resume. Do not invent any new experiences or roles.
+                4. Optimize bullet points using the action-verb + task + result (STAR) format, matching keywords from the job description.
+                5. Format the output in clean, professional Markdown.
                 
                 Only return the tailored resume. Do not include introductory or concluding remarks.
                 """
