@@ -1,7 +1,7 @@
 import re
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.graphics.shapes import Drawing, Line
@@ -122,15 +122,31 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
             after_title = False
             continue
             
-        # 3. Section Headings (## Heading)
-        if line.startswith('## '):
-            text = line[3:].strip().upper()
+        # 3. Section Headings (## Heading, ### Heading, or typical uppercase section names)
+        is_heading = False
+        heading_text = ""
+        
+        if line.startswith('## ') or line.startswith('### '):
+            is_heading = True
+            heading_text = re.sub(r'^#+\s*', '', line).strip()
+        else:
+            clean_line = line.strip('*').strip('_').strip('#').strip()
+            upper_clean = clean_line.upper()
+            sections_list = [
+                "PROFESSIONAL SUMMARY", "SUMMARY", "PROFESSIONAL EXPERIENCE", "EXPERIENCE", 
+                "WORK EXPERIENCE", "EDUCATION", "CERTIFICATIONS", "TECHNICAL SKILLS", 
+                "SKILLS", "CORE COMPETENCIES", "SUMMARY OF QUALIFICATIONS", "QUALIFICATIONS",
+                "ADDITIONAL INFORMATION", "PROJECTS", "LANGUAGES", "CORE SKILLS"
+            ]
+            if upper_clean in sections_list:
+                is_heading = True
+                heading_text = clean_line
+                
+        if is_heading:
+            text = heading_text.upper()
             story.append(Paragraph(clean_markdown(text), section_style))
             # Thin navy bottom rule/border
-            d = Drawing(504, 2)
-            d.add(Line(0, 1, 504, 1, strokeColor=colors.HexColor('#1F3864'), strokeWidth=1))
-            story.append(d)
-            # Removed spacer after line rule to keep it compact
+            story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#1F3864'), spaceBefore=2, spaceAfter=8))
             continue
             
         # 4. Job Title / Experience Header lines
