@@ -295,7 +295,7 @@ def load_profile():
                     except gspread.exceptions.WorksheetNotFound:
                         pass
     except Exception as e:
-        pass
+        st.warning(f"⚠️ Could not load profile from Google Sheets: {e}. Falling back to local configuration/secrets.")
         
     return profile
 
