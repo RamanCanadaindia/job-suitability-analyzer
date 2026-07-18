@@ -734,12 +734,65 @@ with tab_gmail:
 
     gmail_saved = load_gmail_config()
 
+    # Smart discovery for default configuration values in Secrets
+    default_secret_sheet = ""
+    default_secret_email = ""
+    default_secret_email_pass = ""
+    
+    try:
+        # 1. Search Google Sheet ID/URL
+        default_secret_sheet = st.secrets.get("google_spreadsheet_id", "")
+        if not default_secret_sheet:
+            default_secret_sheet = st.secrets.get("google_sheets", {}).get("spreadsheet_id", "")
+        if not default_secret_sheet:
+            for key in st.secrets.keys():
+                if "sheet" in key.lower() or "spreadsheet" in key.lower():
+                    val = st.secrets[key]
+                    if isinstance(val, str) and (len(val) > 15 or "docs.google.com" in val):
+                        default_secret_sheet = val
+                        break
+                    elif isinstance(val, dict):
+                        for subkey in ["id", "url", "spreadsheet_id"]:
+                            if subkey in val:
+                                default_secret_sheet = val[subkey]
+                                break
+                        if default_secret_sheet:
+                            break
+                            
+        # 2. Search Email Address
+        default_secret_email = st.secrets.get("gmail_user", "")
+        if not default_secret_email:
+            default_secret_email = st.secrets.get("email_user", "")
+        if not default_secret_email:
+            for key in st.secrets.keys():
+                kl = key.lower()
+                if ("email" in kl or "gmail" in kl or "outlook" in kl) and "pass" not in kl:
+                    val = st.secrets[key]
+                    if isinstance(val, str) and "@" in val:
+                        default_secret_email = val
+                        break
+                        
+        # 3. Search Email App Password
+        default_secret_email_pass = st.secrets.get("gmail_password", "")
+        if not default_secret_email_pass:
+            default_secret_email_pass = st.secrets.get("email_password", "")
+        if not default_secret_email_pass:
+            for key in st.secrets.keys():
+                kl = key.lower()
+                if ("gmail" in kl or "email" in kl or "outlook" in kl) and ("pass" in kl or "key" in kl):
+                    val = st.secrets[key]
+                    if isinstance(val, str) and val != "" and kl != "app_password":
+                        default_secret_email_pass = val
+                        break
+    except:
+        pass
+
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="yourname@gmail.com")
-        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account Security settings.")
+        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", default_secret_email)), placeholder="yourname@gmail.com")
+        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", default_secret_email_pass)), help="Create an App Password in your Google Account Security settings.")
     with col_g2:
-        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
+        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", default_secret_sheet or st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
         scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=5)
 
     if gmail_user:

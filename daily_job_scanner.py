@@ -163,9 +163,9 @@ def run_pipeline():
     profile = load_profile()
     
     api_key = secrets.get("GEMINI_API_KEY")
-    gmail_user = gmail_cfg.get("gmail_user")
-    gmail_password = gmail_cfg.get("gmail_password")
-    sheet_url = gmail_cfg.get("sheet_url")
+    gmail_user = gmail_cfg.get("gmail_user") or secrets.get("gmail_user") or secrets.get("email_user") or secrets.get("GMAIL_USER")
+    gmail_password = gmail_cfg.get("gmail_password") or secrets.get("gmail_password") or secrets.get("email_password") or secrets.get("GMAIL_PASSWORD")
+    sheet_url = gmail_cfg.get("sheet_url") or secrets.get("google_spreadsheet_id") or secrets.get("sheet_url")
     gcp_json = secrets.get("gcp_service_account_json")
     
     if not api_key or not gmail_user or not gmail_password or not sheet_url or not gcp_json:
