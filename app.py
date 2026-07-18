@@ -347,6 +347,77 @@ def save_profile(data):
     except Exception as e:
         st.warning(f"⚠️ Could not sync profile to Google Sheet: {e}. Check sheet share settings.")
 
+PROFILE_FIELDS = [
+    "candidate_name", "candidate_phone", "candidate_email",
+    "candidate_linkedin", "target_titles", "skills", "experience",
+    "salary", "resume"
+]
+
+
+def get_profile_sheet_url():
+    """Return the spreadsheet URL/ID used for permanent profile storage."""
+    gmail_saved = load_gmail_config()
+    try:
+        secret_sheet = st.secrets.get("google_spreadsheet_id", "")
+    except Exception:
+        secret_sheet = ""
+    return (
+        st.session_state.get("google_spreadsheet_id")
+        or gmail_saved.get("sheet_url")
+        or secret_sheet
+    )
+
+
+def save_profile(data):
+    """Save locally when possible and permanently to one Google Sheets row."""
+    try:
+        with open(profile_path, "w", encoding="utf-8") as profile_file:
+            json.dump(data, profile_file, indent=4)
+    except OSError as exc:
+        if exc.errno != 30:
+            st.warning(f"Local profile backup could not be saved: {exc}")
+    except Exception as exc:
+        st.warning(f"Local profile backup could not be saved: {exc}")
+
+    sheet_url = get_profile_sheet_url()
+    if not sheet_url:
+        st.error(
+            "Google Spreadsheet URL/ID is not configured. Add it in the "
+            "Gmail Alert Scanner settings before saving your profile."
+        )
+        return False
+
+    try:
+        import sheets_helper
+
+        client = sheets_helper.get_gspread_client()
+        if not client:
+            return False
+        spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+        if not spreadsheet:
+            return False
+
+        try:
+            worksheet = spreadsheet.worksheet("Candidate_Profile")
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(
+                title="Candidate_Profile", rows="2", cols=str(len(PROFILE_FIELDS))
+            )
+
+        row_values = [str(data.get(field, "")) for field in PROFILE_FIELDS]
+        worksheet.resize(rows=2, cols=len(PROFILE_FIELDS))
+        worksheet.update(
+            "A1", [PROFILE_FIELDS, row_values], value_input_option="RAW"
+        )
+        return True
+    except Exception as exc:
+        st.error(
+            f"Could not save the profile permanently: {exc}. Check the "
+            "spreadsheet sharing and service-account settings."
+        )
+        return False
+
+
 # Sidebar Configuration
 st.sidebar.header("⚙️ API Configurations")
 
@@ -436,7 +507,7 @@ with tab_profile:
         
     resume = st.text_area("Paste Resume Text / Qualifications summary", value=saved_profile.get("resume", ""), height=250, placeholder="Paste your full resume text here...")
     
-    if st.button("💾 Save Profile locally"):
+    if st.button("💾 Save Profile Permanently"):
         profile_data = {
             "candidate_name": c_name,
             "candidate_phone": c_phone,
@@ -448,8 +519,8 @@ with tab_profile:
             "salary": salary,
             "resume": resume
         }
-        save_profile(profile_data)
-        st.success("Profile saved successfully!")
+        if save_profile(profile_data):
+            st.success("Profile saved permanently in Google Sheets!")
 
 with tab_search:
     st.subheader("Search Real-time Listings")
