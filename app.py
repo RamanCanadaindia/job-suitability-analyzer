@@ -1806,13 +1806,16 @@ with tab_tailor:
             st.error("🔑 Please enter your Google AI Studio API Key in the sidebar first!")
         else:
             with st.spinner("🤖 Adaptively rewriting experience and optimizing keywords..."):
+                raw_phone = cand_profile.get('candidate_phone', '604-440-9885')
+                formatted_phone = raw_phone if raw_phone.lower().startswith('ph') else f"Ph: {raw_phone}"
+                
                 prompt = f"""
                 You are a professional resume writer and ATS optimization expert.
                 Your task is to tailor the candidate's resume to match the target job description.
                 
                 Candidate Contact Details:
                 - Name: {cand_profile.get('candidate_name', 'Raman Deep Kumar')}
-                - Phone: {cand_profile.get('candidate_phone', '604-440-9885')}
+                - Phone: {formatted_phone}
                 - Email: {cand_profile.get('candidate_email', 'beedhtaxservices@outlook.com')}
                 - LinkedIn: {cand_profile.get('candidate_linkedin', 'https://www.linkedin.com/feed/')}
                 
@@ -1825,7 +1828,7 @@ with tab_tailor:
                 - Content: {target_job_desc}
                 
                 Instructions:
-                1. Header & Capitalization: Always use the name 'Raman Deep Kumar' (with proper capitalization) and format the top header of the resume using the candidate's actual Contact Details provided above. Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
+                1. Header & Capitalization: Always use the name 'Raman Deep Kumar' (with proper capitalization) and format the top header of the resume using the candidate's actual Contact Details provided above. Always prefix the phone number with 'Ph: ' (e.g. 'Ph: 604-440-9885'). Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
                 2. Professional Experience Structure: Format the work history as a proper 'Professional Experience' section (do NOT use generic titles like 'Professional Experience Highlights').
                 3. Verified Employer Facts: For the current role at Raman Tax & Accounting Inc., you must ALWAYS include the exact employer name, location, job title, and dates:
                    - Title: FULL-CYCLE BOOKKEEPER
@@ -1838,6 +1841,7 @@ with tab_tailor:
                    - Do NOT include any visible horizontal rule separators (such as '---').
                    - Use standard bullets (like '-') and clear spacing.
                    - Ensure the layout is clean, compact, and fits education onto the same page when possible to avoid producing a nearly empty second page.
+                   - Include clear, capitalized headers for main sections (e.g. PROFESSIONAL SUMMARY, PROFESSIONAL EXPERIENCE, EDUCATION, CERTIFICATIONS, TECHNICAL SKILLS).
                 6. Only return the tailored resume. Do not include introductory or concluding remarks.
                 """
                 try:
@@ -1853,7 +1857,7 @@ with tab_tailor:
                     
                     Candidate Contact Information:
                     - Name: {cand_profile.get('candidate_name', 'Raman Deep Kumar')}
-                    - Phone: {cand_profile.get('candidate_phone', '604-440-9885')}
+                    - Phone: {formatted_phone}
                     - Email: {cand_profile.get('candidate_email', 'beedhtaxservices@outlook.com')}
                     - LinkedIn: {cand_profile.get('candidate_linkedin', 'https://www.linkedin.com/feed/')}
                     - Today's Date: {datetime.now().strftime("%B %d, %Y")}
@@ -1868,7 +1872,7 @@ with tab_tailor:
                     
                     Instructions:
                     1. Format the cover letter professionally with standard contact info blocks. Use Today's Date: {datetime.now().strftime("%B %d, %Y")} directly at the very top. Do NOT write placeholders like '[Current Date]'.
-                    2. Use the provided contact details at the top header and in the closing sign-off block.
+                    2. Use the provided contact details at the top header (with the phone number prefixed as '{formatted_phone}') and in the closing sign-off block.
                     3. Explicitly tie the candidate's matching accomplishments (e.g. QuickBooks, T1/T2 tax preparation, bookkeeping) to the specific challenges/requirements of the job description. Do NOT mention any software or skills (such as CaseWare) that are not present in the candidate's resume/profile.
                     4. Address key requirements and qualifications from the listing. Make it engaging, professional, and convincing.
                     5. Keep it under one page (around 250-350 words).
