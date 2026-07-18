@@ -25,8 +25,8 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeTitle',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
-        fontSize=20,
-        leading=24,
+        fontSize=24,
+        leading=28,
         textColor=colors.HexColor('#1F3864'),  # Navy #1F3864
         spaceAfter=3,
         alignment=1  # Centered
@@ -130,7 +130,7 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
             is_heading = True
             heading_text = re.sub(r'^#+\s*', '', line).strip()
         else:
-            clean_line = line.strip('*').strip('_').strip('#').strip()
+            clean_line = line.strip('*').strip('_').strip('#').strip().rstrip(':. ;').strip()
             upper_clean = clean_line.upper()
             sections_list = [
                 "PROFESSIONAL SUMMARY", "SUMMARY", "PROFESSIONAL EXPERIENCE", "EXPERIENCE", 
