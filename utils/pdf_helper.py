@@ -12,10 +12,10 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
     doc = SimpleDocTemplate(
         pdf_buffer,
         pagesize=letter,
-        leftMargin=54,  # 0.75 in margin
-        rightMargin=54,
-        topMargin=54,
-        bottomMargin=54
+        leftMargin=36,  # 0.5 in margin
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
     )
     
     styles = getSampleStyleSheet()
@@ -25,10 +25,10 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeTitle',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
-        fontSize=24,
-        leading=28,
+        fontSize=22,
+        leading=26,
         textColor=colors.HexColor('#1F3864'),  # Navy #1F3864
-        spaceAfter=3,
+        spaceAfter=2,
         alignment=1  # Centered
     )
     
@@ -36,10 +36,10 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeContact',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=9.5,
-        leading=13,
+        fontSize=9,
+        leading=12,
         textColor=colors.HexColor('#595959'),  # Medium Gray #595959
-        spaceAfter=10,
+        spaceAfter=8,
         alignment=1  # Centered
     )
     
@@ -47,11 +47,11 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeSection',
         parent=styles['Heading2'],
         fontName='Helvetica-Bold',
-        fontSize=11.5,
-        leading=15,
+        fontSize=10.5,
+        leading=14,
         textColor=colors.HexColor('#1F3864'),  # Navy #1F3864
-        spaceBefore=10,
-        spaceAfter=2,
+        spaceBefore=6,
+        spaceAfter=1,
         keepWithNext=True
     )
     
@@ -59,35 +59,35 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
         'ResumeBody',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=9.5,
-        leading=12.5,
+        fontSize=9,
+        leading=11.5,
         textColor=colors.HexColor('#333333'),  # Dark Gray #333333
-        spaceAfter=2
+        spaceAfter=1
     )
     
     bullet_style = ParagraphStyle(
         'ResumeBullet',
         parent=body_style,
-        fontSize=9.5,
-        leading=12.5,
+        fontSize=9,
+        leading=11.5,
         leftIndent=15,
         firstLineIndent=-10,
-        spaceAfter=1
+        spaceAfter=0.5
     )
     
     job_left_style = ParagraphStyle(
         'JobLeft',
         fontName='Helvetica-Bold',
-        fontSize=10,
-        leading=13,
+        fontSize=9.5,
+        leading=12,
         textColor=colors.HexColor('#333333')
     )
     
     job_right_style = ParagraphStyle(
         'JobRight',
         fontName='Helvetica-Bold',
-        fontSize=9.5,
-        leading=13,
+        fontSize=9,
+        leading=12,
         textColor=colors.HexColor('#595959'),
         alignment=2  # Right-aligned
     )
@@ -164,7 +164,7 @@ def convert_markdown_to_pdf(md_text: str) -> BytesIO:
             left_p = Paragraph(clean_markdown(left_content), job_left_style)
             right_p = Paragraph(clean_markdown(clean_date), job_right_style)
             
-            t = Table([[left_p, right_p]], colWidths=[380, 124])
+            t = Table([[left_p, right_p]], colWidths=[410, 130])
             t.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),

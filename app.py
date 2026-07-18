@@ -1828,7 +1828,9 @@ with tab_tailor:
                 - Content: {target_job_desc}
                 
                 Instructions:
-                1. Header & Capitalization: Always use the name 'Raman Deep Kumar' (with proper capitalization) and format the top header of the resume using the candidate's actual Contact Details provided above. Always prefix the phone number with 'Ph: ' (e.g. 'Ph: 604-440-9885'). Do NOT use generic placeholders like '[Your Name]', '[Your Phone Number]', '[Your Email]', or '[Your LinkedIn Profile URL (Optional)]'.
+                1. Name & Single-Line Contact Header: Always use the name 'Raman Deep Kumar' (with proper capitalization). Immediately after the name, format the contact details on a SINGLE line using vertical bars '|' as separators. Use the email and LinkedIn handle. Example structure:
+                   Ph: 604-440-9885 | beedhtaxservices@outlook.com | linkedin.com/in/ramanbeedh
+                   Do NOT split the contact info onto multiple lines, and do NOT use placeholders.
                 2. Professional Experience Structure: Format the work history as a proper 'Professional Experience' section (do NOT use generic titles like 'Professional Experience Highlights').
                 3. Verified Employer Facts: For the current role at Raman Tax & Accounting Inc., you must ALWAYS include the exact employer name, location, job title, and dates:
                    - Title: FULL-CYCLE BOOKKEEPER
@@ -1839,8 +1841,8 @@ with tab_tailor:
                 4. Experience & Bullet Tailoring: Tailor and reorder the bullet points to align with the target job description (e.g. highlighting QuickBooks, tax returns, bank reconciliations, payroll, or GST/HST/PST where relevant). Do NOT alter the verified facts or invent achievements, metrics, numbers, software, or experience not present in the base resume. Only include software or skills that are explicitly present in the candidate's profile or base resume (never hallucinate software like CaseWare).
                 5. ATS-Safe Layout:
                    - Do NOT include any visible horizontal rule separators (such as '---').
-                   - Use standard bullets (like '-') and clear spacing.
-                   - Ensure the layout is clean, compact, and fits education onto the same page when possible to avoid producing a nearly empty second page.
+                   - Use standard bullets (like '-') and keep them concise (ideally 3-4 bullet points per job, maximum 1-2 lines per bullet).
+                   - Ensure the layout is clean, compact, and fits the entire resume onto exactly one page. Education, Certifications, and Skills must fit on page 1.
                    - Include clear, capitalized headers for main sections (e.g. PROFESSIONAL SUMMARY, PROFESSIONAL EXPERIENCE, EDUCATION, CERTIFICATIONS, TECHNICAL SKILLS).
                 6. Only return the tailored resume. Do not include introductory or concluding remarks.
                 """
