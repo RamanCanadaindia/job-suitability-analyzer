@@ -8,31 +8,29 @@ def check_password():
             correct_password = st.secrets.get("APP_PASSWORD", "admin")
         except Exception:
             correct_password = "admin"
-        if st.session_state["password"] == correct_password:
+        entered_password = st.session_state.get("password", "")
+        if entered_password == correct_password:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # remove password from session state
+            st.session_state.pop("password", None)  # do not retain the password
         else:
             st.session_state["password_correct"] = False
 
+    # The callback can run during widget-state reconciliation, so make sure
+    # its key exists before the password widget is constructed.
     if "password_correct" not in st.session_state:
-        # First run, show input for password.
+        st.session_state["password_correct"] = False
+    if not st.session_state["password_correct"]:
+        st.session_state.setdefault("password", "")
+
+    if not st.session_state["password_correct"]:
         st.text_input(
             "Enter password to unlock application", 
             type="password", 
             on_change=password_entered, 
             key="password"
         )
+        if st.session_state.get("password"):
+            st.error("😕 Password incorrect")
         return False
-    elif not st.session_state["password_correct"]:
-        # Password not correct, show input + error.
-        st.text_input(
-            "Enter password to unlock application", 
-            type="password", 
-            on_change=password_entered, 
-            key="password"
-        )
-        st.error("😕 Password incorrect")
-        return False
-    else:
-        # Password correct.
-        return True
+
+    return True
