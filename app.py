@@ -1520,7 +1520,7 @@ with tab_gap:
                         gap_data = json.loads(res.strip())
                         st.session_state["gap_data"] = gap_data
                         st.session_state["gap_job_desc"] = job_desc
-                        st.session_state["gap_url"] = job_url_input
+                        st.session_state["gap_result_url"] = job_url_input
                         
                         if analyze_save_btn:
                             with st.spinner("📊 Posting to Google Sheets..."):
@@ -1585,7 +1585,7 @@ with tab_gap:
     if "gap_data" in st.session_state:
         gap_data = st.session_state["gap_data"]
         job_desc = st.session_state["gap_job_desc"]
-        job_url_input = st.session_state.get("gap_url", "")
+        job_url_input = st.session_state.get("gap_result_url", "")
         
         st.subheader(f"📊 Analysis: {gap_data.get('job_title', 'Job')} at {gap_data.get('company', 'Employer')}")
         st.metric("Suitability Score", f"{gap_data.get('suitability_score', 0)}%")
