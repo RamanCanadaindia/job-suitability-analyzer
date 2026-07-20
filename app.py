@@ -1907,7 +1907,7 @@ with tab_tailor:
                 st.download_button(
                     label="💾 Download Tailored Resume (.md)",
                     data=st.session_state["tailored_resume_text"],
-                    file_name=f"Raman_{clean_title}_Resume.md",
+                    file_name=f"Raman_Deep_Kumar_{clean_title}_Resume.md",
                     mime="text/markdown",
                     use_container_width=True,
                     key="dl_res_md"
@@ -1918,7 +1918,7 @@ with tab_tailor:
                     st.download_button(
                         label="📄 Download Tailored Resume (.pdf)",
                         data=pdf_res_data.getvalue(),
-                        file_name=f"Raman_{clean_title}_Resume.pdf",
+                        file_name=f"Raman_Deep_Kumar_{clean_title}_Resume.pdf",
                         mime="application/pdf",
                         use_container_width=True,
                         key="dl_res_pdf"
@@ -1934,7 +1934,7 @@ with tab_tailor:
                     st.download_button(
                         label="💾 Download Cover Letter (.md)",
                         data=st.session_state["tailored_cover_letter_text"],
-                        file_name=f"Raman_{clean_title}_Cover_Letter.md",
+                        file_name=f"Raman_Deep_Kumar_{clean_title}_Cover_Letter.md",
                         mime="text/markdown",
                         use_container_width=True,
                         key="dl_cl_md"
@@ -1945,7 +1945,7 @@ with tab_tailor:
                         st.download_button(
                             label="📄 Download Cover Letter (.pdf)",
                             data=pdf_cl_data.getvalue(),
-                            file_name=f"Raman_{clean_title}_Cover_Letter.pdf",
+                            file_name=f"Raman_Deep_Kumar_{clean_title}_Cover_Letter.pdf",
                             mime="application/pdf",
                             use_container_width=True,
                             key="dl_cl_pdf"
