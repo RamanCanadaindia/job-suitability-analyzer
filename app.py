@@ -1148,7 +1148,7 @@ with tab_gmail:
     scraped_links = st.session_state.get("jobs_scraped_links", [])
     if scraped_links:
         st.markdown("### 📋 Extracted Indeed Job Alert Links")
-        st.write("Select which job links you want to open in a visible Chrome browser, extract full job descriptions, and evaluate against your profile.")
+        st.write("Select which job links you want to open, extract full job descriptions, and evaluate against your profile.")
         
         selected_jobs = []
         for idx, job in enumerate(scraped_links):
@@ -1157,7 +1157,7 @@ with tab_gmail:
             if chk:
                 selected_jobs.append(job)
                 
-        chrome_btn = st.button("🌐 Open & Analyze Selected in Visible Chrome", type="primary", use_container_width=True)
+        chrome_btn = st.button("🌐 Open & Analyze Selected Jobs", type="primary", use_container_width=True)
         if chrome_btn:
             if not selected_jobs:
                 st.error("Please select at least one job to process!")
@@ -1176,7 +1176,7 @@ with tab_gmail:
                     apply_link = job.get("apply_link", "")
                     source_board = job.get("source", "Indeed")
                     
-                    st.write(f"🔄 Opening visible Chrome and navigating to **{job_title}** at **{company}**...")
+                    st.write(f"🔄 Opening browser and fetching job details for **{job_title}** at **{company}**...")
                     
                     full_desc = ""
                     try:
@@ -1241,7 +1241,7 @@ with tab_gmail:
                                 full_desc = salary_text + "\n" + full_desc
                             browser.close()
                     except Exception as e:
-                        st.warning(f"⚠️ Visible Chrome browser scraping failed for this link: {e}")
+                        st.warning(f"⚠️ Browser scraping failed for this link: {e}")
                         full_desc = ""
                         
                     if not full_desc or len(full_desc.strip()) < 50:
