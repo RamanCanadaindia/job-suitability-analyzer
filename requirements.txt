@@ -1,4 +1,3 @@
-# Job Suitability Analyzer dependencies
 streamlit
 pandas
 openpyxl
